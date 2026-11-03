@@ -1,0 +1,16 @@
+diff --git a/src/org/lineageos/setupwizard/util/SetupWizardUtils.java b/src/org/lineageos/setupwizard/util/SetupWizardUtils.java
+index d29c916..4530a17 100644
+--- a/src/org/lineageos/setupwizard/util/SetupWizardUtils.java
++++ b/src/org/lineageos/setupwizard/util/SetupWizardUtils.java
+@@ -96,6 +96,11 @@ public class SetupWizardUtils {
+     }
+ 
+     public static void setMobileDataEnabled(Context context, boolean enabled) {
++        // Cellular settings are device-global; a secondary user's wizard must
++        // leave the owner's choice unchanged.
++        if (!isOwner()) {
++            return;
++        }
+         TelephonyManager tm = context.getSystemService(TelephonyManager.class);
+         if (tm.isMultiSimEnabled()) {
+             int phoneId = SubscriptionManager.from(context).getDefaultDataPhoneId();

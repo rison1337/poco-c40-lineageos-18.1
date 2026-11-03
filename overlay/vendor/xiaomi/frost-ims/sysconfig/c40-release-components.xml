@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<config>
+    <component-override package="me.phh.treble.app">
+        <component class=".TopLevelSettingsActivity" enabled="false" />
+        <component class=".UpdaterActivity" enabled="false" />
+    </component-override>
+</config>

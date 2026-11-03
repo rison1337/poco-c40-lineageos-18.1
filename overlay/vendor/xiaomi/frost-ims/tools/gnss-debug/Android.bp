@@ -1,0 +1,9 @@
+// Read-only GNSS diagnostic helper; never installed into a product.
+cc_binary {
+    name: "c40_gnss_debug",
+    installable: false,
+    srcs: ["main.cpp"],
+    shared_libs: ["android.hardware.gnss@1.0", "libhidlbase", "libutils"],
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+}
+

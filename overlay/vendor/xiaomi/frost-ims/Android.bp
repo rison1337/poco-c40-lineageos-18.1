@@ -1,0 +1,227 @@
+// Personal frost build: blobs extracted from RU V13.0.17.0.RGFRUXM.
+cc_prebuilt_library_shared {
+    name: "c40_ims_lib-imsvideocodec",
+    stem: "lib-imsvideocodec",
+    system_ext_specific: true,
+    compile_multilib: "both",
+    arch: {
+        arm: { srcs: ["proprietary/system_ext/lib/lib-imsvideocodec.so"] },
+        arm64: { srcs: ["proprietary/system_ext/lib64/lib-imsvideocodec.so"] },
+    },
+    shared_libs: ["c40_ims_lib-imsvtutils", "c40_ims_lib-imsvtextutils", "libcutils", "libutils", "liblog", "c40_ims_libdiag_system", "libgui", "libandroid", "libnativewindow", "libmediandk", "libc++", "libc", "libm", "libdl"],
+    stl: "none",
+    strip: { none: true },
+    check_elf_files: true,
+    allow_undefined_symbols: false,
+}
+
+cc_prebuilt_library_shared {
+    name: "c40_ims_lib-imsvt",
+    stem: "lib-imsvt",
+    system_ext_specific: true,
+    compile_multilib: "both",
+    arch: {
+        arm: { srcs: ["proprietary/system_ext/lib/lib-imsvt.so"] },
+        arm64: { srcs: ["proprietary/system_ext/lib64/lib-imsvt.so"] },
+    },
+    shared_libs: ["c40_ims_lib-imsvideocodec", "libmediandk", "libnativewindow", "libion", "c40_ims_lib-imsvtutils", "libandroid", "libhidlbase", "c40_ims_vendor.qti.imsrtpservice@3.0", "c40_ims_libdiag_system", "libcutils", "libutils", "liblog", "libc++", "libc", "libm", "libdl"],
+    stl: "none",
+    strip: { none: true },
+    check_elf_files: true,
+    allow_undefined_symbols: false,
+}
+
+cc_prebuilt_library_shared {
+    name: "c40_ims_lib-imsvtextutils",
+    stem: "lib-imsvtextutils",
+    system_ext_specific: true,
+    compile_multilib: "both",
+    arch: {
+        arm: { srcs: ["proprietary/system_ext/lib/lib-imsvtextutils.so"] },
+        arm64: { srcs: ["proprietary/system_ext/lib64/lib-imsvtextutils.so"] },
+    },
+    shared_libs: ["libutils", "libcutils", "liblog", "c40_ims_libdiag_system", "c40_ims_lib-imsvtutils", "libGLESv2", "libEGL", "libc++", "libc", "libm", "libdl"],
+    stl: "none",
+    strip: { none: true },
+    check_elf_files: true,
+    allow_undefined_symbols: false,
+}
+
+cc_prebuilt_library_shared {
+    name: "c40_ims_lib-imsvtutils",
+    stem: "lib-imsvtutils",
+    system_ext_specific: true,
+    compile_multilib: "both",
+    arch: {
+        arm: { srcs: ["proprietary/system_ext/lib/lib-imsvtutils.so"] },
+        arm64: { srcs: ["proprietary/system_ext/lib64/lib-imsvtutils.so"] },
+    },
+    shared_libs: ["libutils", "libcutils", "liblog", "c40_ims_libdiag_system", "libc++", "libc", "libm", "libdl"],
+    stl: "none",
+    strip: { none: true },
+    check_elf_files: true,
+    allow_undefined_symbols: false,
+}
+
+cc_prebuilt_library_shared {
+    name: "c40_ims_libdiag_system",
+    stem: "libdiag_system",
+    system_ext_specific: true,
+    compile_multilib: "both",
+    arch: {
+        arm: { srcs: ["proprietary/system_ext/lib/libdiag_system.so"] },
+        arm64: { srcs: ["proprietary/system_ext/lib64/libdiag_system.so"] },
+    },
+    shared_libs: ["c40_ims_vendor.qti.diaghal@1.0", "libhidlbase", "liblog", "libutils", "android.hidl.allocator@1.0", "android.hidl.memory@1.0", "libhidlmemory", "libc", "libcutils", "libc++", "libm", "libdl"],
+    stl: "none",
+    strip: { none: true },
+    check_elf_files: true,
+    allow_undefined_symbols: false,
+}
+
+cc_prebuilt_library_shared {
+    name: "c40_ims_libimscamera_jni",
+    stem: "libimscamera_jni",
+    system_ext_specific: true,
+    compile_multilib: "both",
+    arch: {
+        arm: { srcs: ["proprietary/system_ext/lib/libimscamera_jni.so"] },
+        arm64: { srcs: ["proprietary/system_ext/lib64/libimscamera_jni.so"] },
+    },
+    shared_libs: ["libnativehelper", "libcutils", "libutils", "liblog", "libc++", "libc", "libm", "libdl"],
+    stl: "none",
+    strip: { none: true },
+    check_elf_files: true,
+    allow_undefined_symbols: false,
+}
+
+cc_prebuilt_library_shared {
+    name: "c40_ims_libimsmedia_jni",
+    stem: "libimsmedia_jni",
+    system_ext_specific: true,
+    compile_multilib: "both",
+    arch: {
+        arm: { srcs: ["proprietary/system_ext/lib/libimsmedia_jni.so"] },
+        arm64: { srcs: ["proprietary/system_ext/lib64/libimsmedia_jni.so"] },
+    },
+    shared_libs: ["libnativehelper", "libcutils", "libutils", "libgui", "libbinder", "liblog", "libandroid", "libc++", "libc", "libm", "libdl"],
+    stl: "none",
+    strip: { none: true },
+    check_elf_files: true,
+    allow_undefined_symbols: false,
+}
+
+cc_prebuilt_library_shared {
+    name: "c40_ims_vendor.qti.diaghal@1.0",
+    stem: "vendor.qti.diaghal@1.0",
+    system_ext_specific: true,
+    compile_multilib: "both",
+    arch: {
+        arm: { srcs: ["proprietary/system_ext/lib/vendor.qti.diaghal@1.0.so"] },
+        arm64: { srcs: ["proprietary/system_ext/lib64/vendor.qti.diaghal@1.0.so"] },
+    },
+    shared_libs: ["libhidlbase", "liblog", "libutils", "libcutils", "libc++", "libc", "libm", "libdl"],
+    stl: "none",
+    strip: { none: true },
+    check_elf_files: true,
+    allow_undefined_symbols: false,
+}
+
+cc_prebuilt_library_shared {
+    name: "c40_ims_vendor.qti.imsrtpservice@3.0",
+    stem: "vendor.qti.imsrtpservice@3.0",
+    system_ext_specific: true,
+    compile_multilib: "both",
+    arch: {
+        arm: { srcs: ["proprietary/system_ext/lib/vendor.qti.imsrtpservice@3.0.so"] },
+        arm64: { srcs: ["proprietary/system_ext/lib64/vendor.qti.imsrtpservice@3.0.so"] },
+    },
+    shared_libs: ["libhidlbase", "liblog", "libutils", "libcutils", "libc++", "libc", "libm", "libdl"],
+    stl: "none",
+    strip: { none: true },
+    check_elf_files: true,
+    allow_undefined_symbols: false,
+}
+
+android_app_import {
+    name: "C40Ims",
+    apk: "proprietary/system_ext/priv-app/ims/ims.apk",
+    certificate: "platform",
+    privileged: true,
+    system_ext_specific: true,
+    uses_libs: ["qti-telephony-hidl-wrapper", "qti-telephony-utils", "ims-ext-common"],
+    enforce_uses_libs: true,
+    required: ["c40_ims_lib-imsvideocodec", "c40_ims_lib-imsvt", "c40_ims_lib-imsvtextutils", "c40_ims_lib-imsvtutils", "c40_ims_libdiag_system", "c40_ims_libimscamera_jni", "c40_ims_libimsmedia_jni", "c40_ims_vendor.qti.diaghal@1.0", "c40_ims_vendor.qti.imsrtpservice@3.0", "c40_ims_privapp_permissions"],
+}
+
+prebuilt_etc {
+    name: "c40_ims_privapp_permissions",
+    src: "permissions/privapp-permissions-c40-ims.xml",
+    filename_from_src: true,
+    sub_dir: "permissions",
+    system_ext_specific: true,
+}
+
+prebuilt_etc {
+    name: "c40_cne_default_permissions",
+    src: "permissions/default-permissions-c40-cne.xml",
+    filename_from_src: true,
+    sub_dir: "default-permissions",
+    system_ext_specific: true,
+}
+
+prebuilt_etc {
+    name: "c40_device_init",
+    src: "debug/init.frost-debug.rc",
+    filename_from_src: true,
+    sub_dir: "init",
+}
+
+prebuilt_etc {
+    name: "c40_cne_cross_user_init",
+    src: "debug/init.frost-cne.rc",
+    filename_from_src: true,
+    sub_dir: "init",
+}
+
+sh_binary {
+    name: "c40_cne_cross_user_permission",
+    src: "debug/c40-cne-permission.sh",
+    filename: "c40-cne-permission.sh",
+}
+
+runtime_resource_overlay {
+    name: "C40ImsTelephonyOverlay",
+    manifest: "overlay/AndroidManifest.xml",
+    resource_dirs: ["overlay/res"],
+    certificate: "platform",
+    system_ext_specific: true,
+    sdk_version: "current",
+}
+
+runtime_resource_overlay {
+    name: "C40WifiOverlay",
+    manifest: "wifi-overlay/AndroidManifest.xml",
+    resource_dirs: ["wifi-overlay/res"],
+    certificate: "platform",
+    product_specific: true,
+    sdk_version: "current",
+}
+
+// BEGIN C40 sensor flush accounting
+prebuilt_etc {
+    name: "c40_sensors_hub_flush_fix",
+    src: "sensors/libhubconnection-flush-fixed.so",
+    filename: "libhubconnection-flush-fixed.so",
+    sub_dir: "c40-sensors",
+}
+// END C40 sensor flush accounting
+
+// Disable only the PHH settings and generic updater activities. Its boot receiver
+// and device compatibility services remain installed and enabled.
+prebuilt_etc {
+    name: "c40_release_components",
+    src: "sysconfig/c40-release-components.xml",
+    filename_from_src: true,
+    sub_dir: "sysconfig",
+}

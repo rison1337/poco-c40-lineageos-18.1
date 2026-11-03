@@ -1,0 +1,32 @@
+cc_defaults {
+    name: "c40_lpdump_slot_probe_defaults",
+    cflags: ["-Werror", "-Wextra", "-D_FILE_OFFSET_BITS=64"],
+    compile_multilib: "64",
+    installable: false,
+    shared_libs: [
+        "libbase", "liblog", "liblp", "libprotobuf-cpp-full", "libcutils", "libfs_mgr",
+    ],
+    static_libs: ["libjsonpbparse"],
+    proto: { type: "full" },
+}
+
+cc_library_shared {
+    name: "libc40_lpdump_slot_baseline_probe",
+    defaults: ["c40_lpdump_slot_probe_defaults"],
+    srcs: ["lpdump_baseline.cc", "dynamic_partitions_device_info.proto"],
+}
+
+cc_library_shared {
+    name: "libc40_lpdump_slot_candidate_probe",
+    defaults: ["c40_lpdump_slot_probe_defaults"],
+    srcs: ["lpdump_candidate.cc", "dynamic_partitions_device_info.proto"],
+}
+
+cc_binary {
+    name: "c40_lpdump_slot_probe",
+    cflags: ["-Werror", "-Wextra", "-D_FILE_OFFSET_BITS=64"],
+    compile_multilib: "64",
+    installable: false,
+    srcs: ["probe.cc"],
+    shared_libs: ["libbase", "libdl", "liblog"],
+}

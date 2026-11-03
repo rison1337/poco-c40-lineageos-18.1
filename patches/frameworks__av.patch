@@ -1,0 +1,1191 @@
+diff --git a/camera/Android.bp b/camera/Android.bp
+index 21ef9ee..fa36bb3 100644
+--- a/camera/Android.bp
++++ b/camera/Android.bp
+@@ -14,7 +14,6 @@
+ 
+ cc_library_shared {
+     name: "libcamera_client",
+-    defaults: ["camera_parameter_library_defaults"],
+ 
+     aidl: {
+         export_aidl_headers: true,
+@@ -33,6 +32,7 @@ cc_library_shared {
+         // Source for camera interface parcelables, and manually-written interfaces
+         "Camera.cpp",
+         "CameraMetadata.cpp",
++        "CameraParameters.cpp",
+         "CaptureResult.cpp",
+         "CameraParameters2.cpp",
+         "ICamera.cpp",
+@@ -77,16 +77,6 @@ cc_library_shared {
+ 
+ }
+ 
+-cc_library_static {
+-    name: "libcamera_parameters",
+-
+-    export_include_dirs: [
+-        "include",
+-    ],
+-    srcs: ["CameraParameters.cpp"],
+-
+-}
+-
+ // AIDL interface between camera clients and the camera service.
+ filegroup {
+     name: "libcamera_client_aidl",
+diff --git a/media/bufferpool/2.0/AccessorImpl.cpp b/media/bufferpool/2.0/AccessorImpl.cpp
+index 6111fea..1d2562e 100644
+--- a/media/bufferpool/2.0/AccessorImpl.cpp
++++ b/media/bufferpool/2.0/AccessorImpl.cpp
+@@ -39,6 +39,8 @@ namespace {
+ 
+     static constexpr size_t kMinAllocBytesForEviction = 1024*1024*15;
+     static constexpr size_t kMinBufferCountForEviction = 25;
++    static constexpr size_t kMaxUnusedBufferCount = 64;
++    static constexpr size_t kUnusedBufferCountTarget = kMaxUnusedBufferCount - 16;
+ 
+     static constexpr nsecs_t kEvictGranularityNs = 1000000000; // 1 sec
+     static constexpr nsecs_t kEvictDurationNs = 5000000000; // 5 secs
+@@ -724,9 +726,11 @@ ResultStatus Accessor::Impl::BufferPool::addNewBuffer(
+ }
+ 
+ void Accessor::Impl::BufferPool::cleanUp(bool clearCache) {
+-    if (clearCache || mTimestampUs > mLastCleanUpUs + kCleanUpDurationUs) {
++    if (clearCache || mTimestampUs > mLastCleanUpUs + kCleanUpDurationUs ||
++            mStats.buffersNotInUse() > kMaxUnusedBufferCount) {
+         mLastCleanUpUs = mTimestampUs;
+-        if (mTimestampUs > mLastLogUs + kLogDurationUs) {
++        if (mTimestampUs > mLastLogUs + kLogDurationUs ||
++                mStats.buffersNotInUse() > kMaxUnusedBufferCount) {
+             mLastLogUs = mTimestampUs;
+             ALOGD("bufferpool2 %p : %zu(%zu size) total buffers - "
+                   "%zu(%zu size) used buffers - %zu/%zu (recycle/alloc) - "
+@@ -737,8 +741,9 @@ void Accessor::Impl::BufferPool::cleanUp(bool clearCache) {
+                   mStats.mTotalFetches, mStats.mTotalTransfers);
+         }
+         for (auto freeIt = mFreeBuffers.begin(); freeIt != mFreeBuffers.end();) {
+-            if (!clearCache && (mStats.mSizeCached < kMinAllocBytesForEviction
+-                    || mBuffers.size() < kMinBufferCountForEviction)) {
++            if (!clearCache && mStats.buffersNotInUse() <= kUnusedBufferCountTarget &&
++                    (mStats.mSizeCached < kMinAllocBytesForEviction ||
++                     mBuffers.size() < kMinBufferCountForEviction)) {
+                 break;
+             }
+             auto it = mBuffers.find(*freeIt);
+diff --git a/media/bufferpool/2.0/AccessorImpl.h b/media/bufferpool/2.0/AccessorImpl.h
+index cd1b4d0..3d39941 100644
+--- a/media/bufferpool/2.0/AccessorImpl.h
++++ b/media/bufferpool/2.0/AccessorImpl.h
+@@ -193,6 +193,12 @@ private:
+                 : mSizeCached(0), mBuffersCached(0), mSizeInUse(0), mBuffersInUse(0),
+                   mTotalAllocations(0), mTotalRecycles(0), mTotalTransfers(0), mTotalFetches(0) {}
+ 
++            /// # of currently unused buffers
++            size_t buffersNotInUse() const {
++                ALOG_ASSERT(mBuffersCached >= mBuffersInUse);
++                return mBuffersCached - mBuffersInUse;
++            }
++
+             /// A new buffer is allocated on an allocation request.
+             void onBufferAllocated(size_t allocSize) {
+                 mSizeCached += allocSize;
+diff --git a/media/bufferpool/2.0/BufferPoolClient.cpp b/media/bufferpool/2.0/BufferPoolClient.cpp
+index 342fef6..9308b81 100644
+--- a/media/bufferpool/2.0/BufferPoolClient.cpp
++++ b/media/bufferpool/2.0/BufferPoolClient.cpp
+@@ -32,6 +32,8 @@ namespace implementation {
+ static constexpr int64_t kReceiveTimeoutUs = 1000000; // 100ms
+ static constexpr int kPostMaxRetry = 3;
+ static constexpr int kCacheTtlUs = 1000000; // TODO: tune
++static constexpr size_t kMaxCachedBufferCount = 64;
++static constexpr size_t kCachedBufferCountTarget = kMaxCachedBufferCount - 16;
+ 
+ class BufferPoolClient::Impl
+         : public std::enable_shared_from_this<BufferPoolClient::Impl> {
+@@ -136,6 +138,10 @@ private:
+             --mActive;
+             mLastChangeUs = getTimestampNow();
+         }
++
++        int cachedBufferCount() const {
++            return mBuffers.size() - mActive;
++        }
+     } mCache;
+ 
+     // FMQ - release notifier
+@@ -668,10 +674,12 @@ bool BufferPoolClient::Impl::syncReleased(uint32_t messageId) {
+ // should have mCache.mLock
+ void BufferPoolClient::Impl::evictCaches(bool clearCache) {
+     int64_t now = getTimestampNow();
+-    if (now >= mLastEvictCacheUs + kCacheTtlUs || clearCache) {
++    if (now >= mLastEvictCacheUs + kCacheTtlUs ||
++            clearCache || mCache.cachedBufferCount() > kMaxCachedBufferCount) {
+         size_t evicted = 0;
+         for (auto it = mCache.mBuffers.begin(); it != mCache.mBuffers.end();) {
+-            if (!it->second->hasCache() && (it->second->expire() || clearCache)) {
++            if (!it->second->hasCache() && (it->second->expire() ||
++                        clearCache || mCache.cachedBufferCount() > kCachedBufferCountTarget)) {
+                 it = mCache.mBuffers.erase(it);
+                 ++evicted;
+             } else {
+diff --git a/media/codec2/sfplugin/CCodecBufferChannel.cpp b/media/codec2/sfplugin/CCodecBufferChannel.cpp
+index 1654b11..b8ca41b 100644
+--- a/media/codec2/sfplugin/CCodecBufferChannel.cpp
++++ b/media/codec2/sfplugin/CCodecBufferChannel.cpp
+@@ -1300,54 +1300,30 @@ status_t CCodecBufferChannel::requestInitialInputBuffers() {
+                 return a.capacity < b.capacity;
+             });
+ 
+-    {
+-        Mutexed<std::list<sp<ABuffer>>>::Locked configs(mFlushedConfigs);
+-        if (!configs->empty()) {
+-            while (!configs->empty()) {
+-                sp<ABuffer> config = configs->front();
+-                configs->pop_front();
+-                // Find the smallest input buffer that can fit the config.
+-                auto i = std::find_if(
+-                        clientInputBuffers.begin(),
+-                        clientInputBuffers.end(),
+-                        [cfgSize = config->size()](const ClientInputBuffer& b) {
+-                            return b.capacity >= cfgSize;
+-                        });
+-                if (i == clientInputBuffers.end()) {
+-                    ALOGW("[%s] no input buffer large enough for the config "
+-                          "(%zu bytes)",
+-                          mName, config->size());
+-                    return NO_MEMORY;
+-                }
+-                sp<MediaCodecBuffer> buffer = i->buffer;
+-                memcpy(buffer->base(), config->data(), config->size());
+-                buffer->setRange(0, config->size());
+-                buffer->meta()->clear();
+-                buffer->meta()->setInt64("timeUs", 0);
+-                buffer->meta()->setInt32("csd", 1);
+-                if (queueInputBufferInternal(buffer) != OK) {
+-                    ALOGW("[%s] Error while queueing a flushed config",
+-                          mName);
+-                    return UNKNOWN_ERROR;
+-                }
+-                clientInputBuffers.erase(i);
+-            }
+-        } else if (oStreamFormat.value == C2BufferData::LINEAR &&
+-                   (!prepend || prepend.value == PREPEND_HEADER_TO_NONE)) {
+-            sp<MediaCodecBuffer> buffer = clientInputBuffers.front().buffer;
+-            // WORKAROUND: Some apps expect CSD available without queueing
+-            //             any input. Queue an empty buffer to get the CSD.
+-            buffer->setRange(0, 0);
+-            buffer->meta()->clear();
+-            buffer->meta()->setInt64("timeUs", 0);
+-            if (queueInputBufferInternal(buffer) != OK) {
+-                ALOGW("[%s] Error while queueing an empty buffer to get CSD",
+-                      mName);
+-                return UNKNOWN_ERROR;
+-            }
+-            clientInputBuffers.pop_front();
++    std::list<std::unique_ptr<C2Work>> flushedConfigs;
++    mFlushedConfigs.lock()->swap(flushedConfigs);
++    if (!flushedConfigs.empty()) {
++        err = mComponent->queue(&flushedConfigs);
++        if (err != C2_OK) {
++            ALOGW("[%s] Error while queueing a flushed config", mName);
++            return UNKNOWN_ERROR;
+         }
+     }
++    if (oStreamFormat.value == C2BufferData::LINEAR &&
++            (!prepend || prepend.value == PREPEND_HEADER_TO_NONE)) {
++        sp<MediaCodecBuffer> buffer = clientInputBuffers.front().buffer;
++        // WORKAROUND: Some apps expect CSD available without queueing
++        //             any input. Queue an empty buffer to get the CSD.
++        buffer->setRange(0, 0);
++        buffer->meta()->clear();
++        buffer->meta()->setInt64("timeUs", 0);
++        if (queueInputBufferInternal(buffer) != OK) {
++            ALOGW("[%s] Error while queueing an empty buffer to get CSD",
++                  mName);
++            return UNKNOWN_ERROR;
++        }
++        clientInputBuffers.pop_front();
++    }
+ 
+     for (const ClientInputBuffer& clientInputBuffer: clientInputBuffers) {
+         mCallback->onInputBufferAvailable(
+@@ -1396,27 +1372,36 @@ void CCodecBufferChannel::release() {
+ 
+ void CCodecBufferChannel::flush(const std::list<std::unique_ptr<C2Work>> &flushedWork) {
+     ALOGV("[%s] flush", mName);
+-    {
+-        Mutexed<std::list<sp<ABuffer>>>::Locked configs(mFlushedConfigs);
+-        for (const std::unique_ptr<C2Work> &work : flushedWork) {
+-            if (!(work->input.flags & C2FrameData::FLAG_CODEC_CONFIG)) {
+-                continue;
+-            }
+-            if (work->input.buffers.empty()
+-                    || work->input.buffers.front()->data().linearBlocks().empty()) {
+-                ALOGD("[%s] no linear codec config data found", mName);
+-                continue;
+-            }
+-            C2ReadView view =
+-                    work->input.buffers.front()->data().linearBlocks().front().map().get();
+-            if (view.error() != C2_OK) {
+-                ALOGD("[%s] failed to map flushed codec config data: %d", mName, view.error());
+-                continue;
+-            }
+-            configs->push_back(ABuffer::CreateAsCopy(view.data(), view.capacity()));
+-            ALOGV("[%s] stashed flushed codec config data (size=%u)", mName, view.capacity());
+-        }
+-    }
++    std::list<std::unique_ptr<C2Work>> configs;
++    for (const std::unique_ptr<C2Work> &work : flushedWork) {
++        if (!(work->input.flags & C2FrameData::FLAG_CODEC_CONFIG)) {
++            continue;
++        }
++        if (work->input.buffers.empty()
++                || work->input.buffers.front() == nullptr
++                || work->input.buffers.front()->data().linearBlocks().empty()) {
++            ALOGD("[%s] no linear codec config data found", mName);
++            continue;
++        }
++        std::unique_ptr<C2Work> copy(new C2Work);
++        copy->input.flags = C2FrameData::flags_t(work->input.flags | C2FrameData::FLAG_DROP_FRAME);
++        copy->input.ordinal = work->input.ordinal;
++        copy->input.buffers.insert(
++                copy->input.buffers.begin(),
++                work->input.buffers.begin(),
++                work->input.buffers.end());
++        for (const std::unique_ptr<C2Param> &param : work->input.configUpdate) {
++            copy->input.configUpdate.push_back(C2Param::Copy(*param));
++        }
++        copy->input.infoBuffers.insert(
++                copy->input.infoBuffers.begin(),
++                work->input.infoBuffers.begin(),
++                work->input.infoBuffers.end());
++        copy->worklets.emplace_back(new C2Worklet);
++        configs.push_back(std::move(copy));
++        ALOGV("[%s] stashed flushed codec config data", mName);
++    }
++    mFlushedConfigs.lock()->swap(configs);
+     {
+         Mutexed<Input>::Locked input(mInput);
+         input->buffers->flush();
+diff --git a/media/codec2/sfplugin/CCodecBufferChannel.h b/media/codec2/sfplugin/CCodecBufferChannel.h
+index 046c5c3..e2c9aaa 100644
+--- a/media/codec2/sfplugin/CCodecBufferChannel.h
++++ b/media/codec2/sfplugin/CCodecBufferChannel.h
+@@ -277,7 +277,7 @@ private:
+         uint32_t outputDelay;
+     };
+     Mutexed<Output> mOutput;
+-    Mutexed<std::list<sp<ABuffer>>> mFlushedConfigs;
++    Mutexed<std::list<std::unique_ptr<C2Work>>> mFlushedConfigs;
+ 
+     std::atomic_uint64_t mFrameIndex;
+     std::atomic_uint64_t mFirstValidFrameIndex;
+diff --git a/media/libstagefright/ACodec.cpp b/media/libstagefright/ACodec.cpp
+index 4a3b32f..fdba45d 100644
+--- a/media/libstagefright/ACodec.cpp
++++ b/media/libstagefright/ACodec.cpp
+@@ -1176,6 +1176,9 @@ status_t ACodec::configureOutputBuffersFromNativeWindow(
+         return err;
+     }
+ 
++    ALOGE("Window undequeued buffers is %d\n", *minUndequeuedBuffers);
++    ALOGE("Consumerrequested %d\n", def.nBufferCountMin);
++
+     // FIXME: assume that surface is controlled by app (native window
+     // returns the number for the case when surface is not controlled by app)
+     // FIXME2: This means that minUndeqeueudBufs can be 1 larger than reported
+@@ -1188,22 +1191,29 @@ status_t ACodec::configureOutputBuffersFromNativeWindow(
+     // 2. try to allocate two (2) additional buffers to reduce starvation from
+     //    the consumer
+     //    plus an extra buffer to account for incorrect minUndequeuedBufs
+-    for (OMX_U32 extraBuffers = 2 + 1; /* condition inside loop */; extraBuffers--) {
+-        OMX_U32 newBufferCount =
+-            def.nBufferCountMin + *minUndequeuedBuffers + extraBuffers;
++    for (int extraBuffers = 2 + 1; /* condition inside loop */; extraBuffers--) {
++        int a = def.nBufferCountMin;
++        int b = *minUndequeuedBuffers;
++        int c = extraBuffers;
++        int newBufferCount = a+b+c;
+         def.nBufferCountActual = newBufferCount;
+         err = mOMXNode->setParameter(
+                 OMX_IndexParamPortDefinition, &def, sizeof(def));
+ 
+         if (err == OK) {
+-            *minUndequeuedBuffers += extraBuffers;
++            ALOGE("Managed to allocate %d buffers (%d extra)\n", newBufferCount, extraBuffers);
++            if(extraBuffers > 0) {
++                *minUndequeuedBuffers += extraBuffers;
++            } else {
++                *minUndequeuedBuffers -= -extraBuffers;
++            }
+             break;
+         }
+ 
+         ALOGW("[%s] setting nBufferCountActual to %u failed: %d",
+                 mComponentName.c_str(), newBufferCount, err);
+         /* exit condition */
+-        if (extraBuffers == 0) {
++        if (extraBuffers == -2 || newBufferCount == 1) {
+             return err;
+         }
+     }
+@@ -4469,9 +4479,8 @@ status_t ACodec::setupAVCEncoderParameters(const sp<AMessage> &msg) {
+     if (msg->findInt32("intra-refresh-mode", &intraRefreshMode)) {
+         err = setCyclicIntraMacroblockRefresh(msg, intraRefreshMode);
+         if (err != OK) {
+-            ALOGE("Setting intra macroblock refresh mode (%d) failed: 0x%x",
+-                    err, intraRefreshMode);
+-            return err;
++            ALOGE("setupAVCEncoderParameters(): set intra-refresh-mode failed, ignoring..");
++            //return err;
+         }
+     }
+ 
+diff --git a/services/audiopolicy/common/managerdefinitions/src/HwModule.cpp b/services/audiopolicy/common/managerdefinitions/src/HwModule.cpp
+index d31e443..b2ca5e8 100644
+--- a/services/audiopolicy/common/managerdefinitions/src/HwModule.cpp
++++ b/services/audiopolicy/common/managerdefinitions/src/HwModule.cpp
+@@ -292,6 +292,27 @@ sp <HwModule> HwModuleCollection::getModuleForDeviceType(audio_devices_t type,
+             }
+         }
+     }
++    //We didn't find one? Ok but all SCOs are equivalent surely?
++    if(type == AUDIO_DEVICE_OUT_BLUETOOTH_SCO ||
++        type == AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET ||
++        type == AUDIO_DEVICE_OUT_BLUETOOTH_SCO_CARKIT) {
++        ALOGE("Fallback SCO");
++        if(type != AUDIO_DEVICE_OUT_BLUETOOTH_SCO) {
++            auto ret = getModuleForDeviceType(AUDIO_DEVICE_OUT_BLUETOOTH_SCO, encodedFormat);
++            ALOGE("Fallback SCO simple? %s", (ret != nullptr) ? "yes" : "no");
++            if(ret != nullptr) return ret;
++        }
++        if(type != AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET) {
++            auto ret = getModuleForDeviceType(AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET, encodedFormat);
++            ALOGE("Fallback SCO headset? %s", (ret != nullptr) ? "yes" : "no");
++            if(ret != nullptr) return ret;
++        }
++        if(type != AUDIO_DEVICE_OUT_BLUETOOTH_SCO_CARKIT) {
++            auto ret = getModuleForDeviceType(AUDIO_DEVICE_OUT_BLUETOOTH_SCO_CARKIT, encodedFormat);
++            ALOGE("Fallback SCO carkit? %s", (ret != nullptr) ? "yes" : "no");
++            if(ret != nullptr) return ret;
++        }
++    }
+     return nullptr;
+ }
+ 
+diff --git a/services/audiopolicy/common/managerdefinitions/src/Serializer.cpp b/services/audiopolicy/common/managerdefinitions/src/Serializer.cpp
+index 883e713..e57bd24 100644
+--- a/services/audiopolicy/common/managerdefinitions/src/Serializer.cpp
++++ b/services/audiopolicy/common/managerdefinitions/src/Serializer.cpp
+@@ -29,6 +29,7 @@
+ #include <utils/StrongPointer.h>
+ #include <utils/Errors.h>
+ #include <utils/RefBase.h>
++#include <cutils/properties.h>
+ #include "Serializer.h"
+ #include "TypeConverter.h"
+ 
+@@ -36,6 +37,8 @@ namespace android {
+ 
+ namespace {
+ 
++static bool forceDisableA2dpOffload = false;
++
+ // TODO(mnaganov): Consider finding an alternative for using HIDL code.
+ using hardware::Return;
+ using hardware::Status;
+@@ -318,7 +321,7 @@ status_t deserializeCollection(const xmlNode *cur,
+                         return status;
+                     }
+                 } else {
+-                    return BAD_VALUE;
++                    ALOGE("Ignoring...");
+                 }
+             }
+         }
+@@ -396,15 +399,24 @@ Return<AudioGainTraits::Element> AudioGainTraits::deserialize(const xmlNode *cur
+     }
+ }
+ 
++static bool fixedEarpieceChannels = false;
+ Return<AudioProfileTraits::Element> AudioProfileTraits::deserialize(const xmlNode *cur,
+-        PtrSerializingCtx /*serializingContext*/)
++        PtrSerializingCtx serializingContext)
+ {
++    bool isOutput = serializingContext != nullptr;
+     std::string samplingRates = getXmlAttribute(cur, Attributes::samplingRates);
+     std::string format = getXmlAttribute(cur, Attributes::format);
+     std::string channels = getXmlAttribute(cur, Attributes::channelMasks);
++    ChannelTraits::Collection channelsMask = channelMasksFromString(channels, ",");
++
++    //Some Foxconn devices have wrong earpiece channel mask, leading to no channel mask
++    if(channelsMask.size() == 1 && *channelsMask.begin() == AUDIO_CHANNEL_IN_MONO && isOutput) {
++        fixedEarpieceChannels = true;
++        channelsMask = channelMasksFromString("AUDIO_CHANNEL_OUT_MONO", ",");
++    }
+ 
+     Element profile = new AudioProfile(formatFromString(format, gDynamicFormat),
+-            channelMasksFromString(channels, ","),
++            channelsMask,
+             samplingRatesFromString(samplingRates, ","));
+ 
+     profile->setDynamicFormat(profile->getFormat() == gDynamicFormat);
+@@ -517,7 +529,11 @@ Return<DevicePortTraits::Element> DevicePortTraits::deserialize(const xmlNode *c
+     Element deviceDesc = new DeviceDescriptor(type, name, address, encodedFormats);
+ 
+     AudioProfileTraits::Collection profiles;
+-    status_t status = deserializeCollection<AudioProfileTraits>(cur, &profiles, NULL);
++    status_t status;
++    if(audio_is_output_devices(type))
++        status = deserializeCollection<AudioProfileTraits>(cur, &profiles, (PtrSerializingCtx)1);
++    else
++        status = deserializeCollection<AudioProfileTraits>(cur, &profiles, NULL);
+     if (status != NO_ERROR) {
+         return Status::fromStatusT(status);
+     }
+@@ -539,6 +555,17 @@ Return<DevicePortTraits::Element> DevicePortTraits::deserialize(const xmlNode *c
+     return deviceDesc;
+ }
+ 
++char* trim(char * s) {
++    int l = strlen(s);
++
++    if (l > 0) {
++      while (isspace(s[l - 1])) --l;
++      while (*s && isspace(*s)) ++s, --l;
++    }
++
++    return strndup(s, l);
++}
++
+ Return<RouteTraits::Element> RouteTraits::deserialize(const xmlNode *cur, PtrSerializingCtx ctx)
+ {
+     std::string type = getXmlAttribute(cur, Attributes::type);
+@@ -579,10 +606,14 @@ Return<RouteTraits::Element> RouteTraits::deserialize(const xmlNode *cur, PtrSer
+         if (strlen(devTag) != 0) {
+             sp<PolicyAudioPort> source = ctx->findPortByTagName(devTag);
+             if (source == NULL) {
+-                ALOGE("%s: no source found with name=%s", __func__, devTag);
+-                return Status::fromStatusT(BAD_VALUE);
++                source = ctx->findPortByTagName(trim(devTag));
++                if (source == NULL) {
++                    ALOGE("%s: no source found with name=%s", __func__, devTag);
++                }
++            }
++            if(source != nullptr) {
++                sources.add(source);
+             }
+-            sources.add(source);
+         }
+         devTag = strtok(NULL, ",");
+     }
+@@ -596,6 +627,98 @@ Return<RouteTraits::Element> RouteTraits::deserialize(const xmlNode *cur, PtrSer
+     return route;
+ }
+ 
++static void fixupQualcommBtScoRoute(RouteTraits::Collection& routes, DevicePortTraits::Collection& devicePorts, HwModule* ctx) {
++    // On many Qualcomm devices, there is a BT SCO Headset Mic => primary input mix
++    // But Telephony Rx => BT SCO Headset route is missing
++    // When we detect such case, add the missing route
++
++    // If we have:
++    // <route type="mix" sink="Telephony Tx" sources="voice_tx"/>
++    // <route type="mix" sink="primary input" sources="Built-In Mic,Built-In Back Mic,Wired Headset Mic,BT SCO Headset Mic"/>
++    // <devicePort tagName="BT SCO Headset" type="AUDIO_DEVICE_OUT_BLUETOOTH_SCO_HEADSET" role="sink" />
++    // And no <route type="mix" sink="BT SCO Headset" />
++
++    // Add:
++    // <route type="mix" sink="BT SCO Headset" sources="primary output,deep_buffer,compressed_offload,Telephony Rx"/>
++    bool foundBtScoHeadsetDevice = false;
++    for(const auto& device: devicePorts) {
++        if(device->getTagName() == "BT SCO Headset") {
++            foundBtScoHeadsetDevice = true;
++            break;
++        }
++    }
++    if(!foundBtScoHeadsetDevice) {
++        ALOGE("No BT SCO Headset device found, don't patch policy");
++        return;
++    }
++
++    bool foundTelephony = false;
++    bool foundBtScoInput = false;
++    bool foundScoHeadsetRoute = false;
++    for(const auto& route: routes) {
++        ALOGE("Looking at route %d\n", route->getType());
++        if(route->getType() != AUDIO_ROUTE_MIX)
++            continue;
++        auto sink = route->getSink();
++        ALOGE("... With sink %s\n", sink->getTagName().c_str());
++        if(sink->getTagName() == "Telephony Tx") {
++            foundTelephony = true;
++            continue;
++        }
++        if(sink->getTagName() == "BT SCO Headset") {
++            foundScoHeadsetRoute = true;
++            break;
++        }
++        for(const auto& source: route->getSources()) {
++            ALOGE("... With source %s\n", source->getTagName().c_str());
++            if(source->getTagName() == "BT SCO Headset Mic") {
++                foundBtScoInput = true;
++                break;
++            }
++        }
++    }
++    //The route we want to add is already there
++    ALOGE("Done looking for existing routes");
++    if(foundScoHeadsetRoute)
++        return;
++
++    ALOGE("No existing route found... %d %d", foundTelephony ? 1 : 0, foundBtScoInput ? 1 : 0);
++    //We couldn't find the routes we assume are required for the function we want to add
++    if(!foundTelephony || !foundBtScoInput)
++        return;
++    ALOGE("Adding our own.");
++
++    // Add:
++    // <route type="mix" sink="BT SCO Headset" sources="primary output,deep_buffer,compressed_offload,Telephony Rx"/>
++    AudioRoute *newRoute = new AudioRoute(AUDIO_ROUTE_MIX);
++
++    auto sink = ctx->findPortByTagName("BT SCO Headset");
++    ALOGE("Got sink %p\n", sink.get());
++    newRoute->setSink(sink);
++
++    Vector<sp<PolicyAudioPort>> sources;
++    for(const auto& sourceName: {
++            "primary output",
++            "deep_buffer",
++            "compressed_offload",
++            "Telephony Rx"
++            }) {
++        auto source = ctx->findPortByTagName(sourceName);
++        ALOGE("Got source %p\n", source.get());
++        if (source.get() != nullptr) {
++            sources.add(source);
++            source->addRoute(newRoute);
++        }
++    }
++
++    newRoute->setSources(sources);
++
++    sink->addRoute(newRoute);
++
++    auto ret = routes.add(newRoute);
++    ALOGE("route add returned %zd", ret);
++}
++
+ Return<ModuleTraits::Element> ModuleTraits::deserialize(const xmlNode *cur, PtrSerializingCtx ctx)
+ {
+     std::string name = getXmlAttribute(cur, Attributes::name);
+@@ -615,12 +738,34 @@ Return<ModuleTraits::Element> ModuleTraits::deserialize(const xmlNode *cur, PtrS
+ 
+     Element module = new HwModule(name.c_str(), versionMajor, versionMinor);
+ 
++    bool isA2dpModule = strcmp(name.c_str(), "a2dp") == 0;
++    bool isPrimaryModule = strcmp(name.c_str(), "primary") == 0;
++
+     // Deserialize childrens: Audio Mix Port, Audio Device Ports (Source/Sink), Audio Routes
+     MixPortTraits::Collection mixPorts;
+     status_t status = deserializeCollection<MixPortTraits>(cur, &mixPorts, NULL);
+     if (status != NO_ERROR) {
+         return Status::fromStatusT(status);
+     }
++    if(forceDisableA2dpOffload && isA2dpModule) {
++        for(const auto& mixPort: mixPorts) {
++            ALOGE("Disable a2dp offload...? %s", mixPort->getTagName().c_str());
++            //"a2dp" sw module already has a2dp out
++            if(mixPort->getTagName() == "a2dp output") {
++                forceDisableA2dpOffload = false;
++                break;
++            }
++        }
++    }
++    if(forceDisableA2dpOffload && isA2dpModule) {
++        //Add
++        //<mixPort name="a2dp output" role="source"/>
++        auto mixPort = new IOProfile("a2dp output", AUDIO_PORT_ROLE_SOURCE);
++        AudioProfileTraits::Collection profiles;
++        profiles.add(AudioProfile::createFullDynamic());
++        mixPort->setAudioProfiles(profiles);
++        mixPorts.push_back(mixPort);
++    }
+     module->setProfiles(mixPorts);
+ 
+     DevicePortTraits::Collection devicePorts;
+@@ -628,6 +773,90 @@ Return<ModuleTraits::Element> ModuleTraits::deserialize(const xmlNode *cur, PtrS
+     if (status != NO_ERROR) {
+         return Status::fromStatusT(status);
+     }
++    Vector<std::string> a2dpOuts;
++    a2dpOuts.push_back("BT A2DP Out");
++    a2dpOuts.push_back("BT A2DP Headphones");
++    a2dpOuts.push_back("BT A2DP Speaker");
++    if(forceDisableA2dpOffload) {
++        if(isA2dpModule) {
++            //<devicePort tagName="BT A2DP Out" type="AUDIO_DEVICE_OUT_BLUETOOTH_A2DP" role="sink" address="lhdc_a2dp">
++            //  <profile name="" format="AUDIO_FORMAT_PCM_16_BIT"
++            //      samplingRates="44100,48000,96000"
++            //      channelMasks="AUDIO_CHANNEL_OUT_STEREO"/>
++            //</devicePort>
++            if(true) {
++                FormatVector formats;
++                //auto devicePortOut = new DeviceDescriptor(AUDIO_DEVICE_OUT_BLUETOOTH_A2DP, formats, "BT A2DP Out");
++                auto devicePortOut = new DeviceDescriptor(AUDIO_DEVICE_OUT_BLUETOOTH_A2DP, "BT A2DP Out");
++                AudioProfileTraits::Collection profiles;
++                ChannelTraits::Collection channels;
++                channels.insert(AUDIO_CHANNEL_OUT_STEREO);
++                SampleRateSet sampleRates;
++                sampleRates.insert(44100);
++                sampleRates.insert(48000);
++                sampleRates.insert(96000);
++                auto profile = new AudioProfile(AUDIO_FORMAT_PCM_16_BIT, channels, sampleRates);
++                profiles.add(profile);
++                devicePortOut->setAudioProfiles(profiles);
++                devicePortOut->setAddress("lhdc_a2dp");
++                devicePorts.add(devicePortOut);
++            }
++            //<devicePort tagName="BT A2DP Headphones" type="AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_HEADPHONES" role="sink" address="lhdc_a2dp">
++            //  <profile name="" format="AUDIO_FORMAT_PCM_16_BIT"
++            //      samplingRates="44100,48000,96000"
++            //      channelMasks="AUDIO_CHANNEL_OUT_STEREO"/>
++            //</devicePort>
++            if(true) {
++                FormatVector formats;
++                auto devicePortOut = new DeviceDescriptor(AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_HEADPHONES, "BT A2DP Headphones");
++                AudioProfileTraits::Collection profiles;
++                ChannelTraits::Collection channels;
++                channels.insert(AUDIO_CHANNEL_OUT_STEREO);
++                SampleRateSet sampleRates;
++                sampleRates.insert(44100);
++                sampleRates.insert(48000);
++                sampleRates.insert(96000);
++                auto profile = new AudioProfile(AUDIO_FORMAT_PCM_16_BIT, channels, sampleRates);
++                profiles.add(profile);
++                devicePortOut->setAudioProfiles(profiles);
++                devicePortOut->setAddress("lhdc_a2dp");
++                devicePorts.add(devicePortOut);
++            }
++            //<devicePort tagName="BT A2DP Speaker" type="AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_SPEAKER" role="sink" address="lhdc_a2dp">
++            //  <profile name="" format="AUDIO_FORMAT_PCM_16_BIT"
++            //      samplingRates="44100,48000,96000"
++            //      channelMasks="AUDIO_CHANNEL_OUT_STEREO"/>
++            //</devicePort>
++            if(true) {
++                FormatVector formats;
++                auto devicePortOut = new DeviceDescriptor(AUDIO_DEVICE_OUT_BLUETOOTH_A2DP_SPEAKER, "BT A2DP Speaker");
++                AudioProfileTraits::Collection profiles;
++                ChannelTraits::Collection channels;
++                channels.insert(AUDIO_CHANNEL_OUT_STEREO);
++                SampleRateSet sampleRates;
++                sampleRates.insert(44100);
++                sampleRates.insert(48000);
++                sampleRates.insert(96000);
++                auto profile = new AudioProfile(AUDIO_FORMAT_PCM_16_BIT, channels, sampleRates);
++                profiles.add(profile);
++                devicePortOut->setAudioProfiles(profiles);
++                devicePortOut->setAddress("lhdc_a2dp");
++                devicePorts.add(devicePortOut);
++
++            }
++        } else if(isPrimaryModule) {
++            for(const auto& out: a2dpOuts) {
++                auto iterA = std::find_if(devicePorts.begin(), devicePorts.end(), [out](const auto port) {
++                        if(port->getTagName() == out) return true;
++                        return false;
++                        });
++                if(iterA != devicePorts.end()) {
++                    ALOGE("Erasing device port %s", (*iterA)->getTagName().c_str());
++                    devicePorts.erase(iterA);
++                }
++            }
++        }
++    }
+     module->setDeclaredDevices(devicePorts);
+ 
+     RouteTraits::Collection routes;
+@@ -635,6 +864,76 @@ Return<ModuleTraits::Element> ModuleTraits::deserialize(const xmlNode *cur, PtrS
+     if (status != NO_ERROR) {
+         return Status::fromStatusT(status);
+     }
++    if(forceDisableA2dpOffload) {
++        if(strcmp(name.c_str(), "primary") == 0) {
++            for(const auto& out: a2dpOuts) {
++                auto iterA = std::find_if(routes.begin(), routes.end(), [out](const auto route) {
++                        if(route->getType() != AUDIO_ROUTE_MIX)
++                        return false;
++                        auto sink = route->getSink();
++                        if(sink->getTagName() == out) {
++                            return true;
++                        }
++                        return false;
++                });
++                if(iterA != routes.end()) {
++                    auto sink = (*iterA)->getSink()->getTagName();
++                    ALOGE("Erasing route %s", sink.c_str());
++                    routes.erase(iterA);
++                }
++            }
++        } else if(isA2dpModule) {
++            //<route type="mix" sink="BT A2DP Out"
++            //  sources="a2dp output"/>
++            if(true) {
++                auto newRoute = new AudioRoute(AUDIO_ROUTE_MIX);
++                auto sink = module->findPortByTagName("BT A2DP Out");
++                auto source = module->findPortByTagName("a2dp output");
++                newRoute->setSink(sink);
++                Vector<sp<PolicyAudioPort>> sources;
++                sources.add(source);
++
++                sink->addRoute(newRoute);
++                source->addRoute(newRoute);
++                newRoute->setSources(sources);
++
++                routes.add(newRoute);
++            }
++            //<route type="mix" sink="BT A2DP Headphones"
++            //  sources="a2dp output"/>
++            if(true) {
++                auto newRoute = new AudioRoute(AUDIO_ROUTE_MIX);
++                auto sink = module->findPortByTagName("BT A2DP Headphones");
++                auto source = module->findPortByTagName("a2dp output");
++                newRoute->setSink(sink);
++                Vector<sp<PolicyAudioPort>> sources;
++                sources.add(source);
++
++                sink->addRoute(newRoute);
++                source->addRoute(newRoute);
++                newRoute->setSources(sources);
++                routes.add(newRoute);
++            }
++            //<route type="mix" sink="BT A2DP Speaker"
++            //  sources="a2dp output"/>
++            if(true) {
++                auto newRoute = new AudioRoute(AUDIO_ROUTE_MIX);
++                auto sink = module->findPortByTagName("BT A2DP Speaker");
++                auto source = module->findPortByTagName("a2dp output");
++                newRoute->setSink(sink);
++                Vector<sp<PolicyAudioPort>> sources;
++                sources.add(source);
++
++                sink->addRoute(newRoute);
++                source->addRoute(newRoute);
++                newRoute->setSources(sources);
++                routes.add(newRoute);
++            }
++        }
++    }
++    ALOGE("Good morning");
++    fixupQualcommBtScoRoute(routes, devicePorts, module.get());
++    ALOGE("Good morning2");
+     module->setRoutes(routes);
+ 
+     for (const xmlNode *children = cur->xmlChildrenNode; children != NULL;
+@@ -653,7 +952,12 @@ Return<ModuleTraits::Element> ModuleTraits::deserialize(const xmlNode *cur, PtrS
+                         sp<DeviceDescriptor> device = module->getDeclaredDevices().
+                                 getDeviceFromTagName(std::string(reinterpret_cast<const char*>(
+                                                         attachedDevice.get())));
+-                        ctx->addDevice(device);
++                        if(device != nullptr) {
++                            ctx->addDevice(device);
++                        } else {
++                            ALOGE("NULL DEVICE %s: %s %s=%s", __func__, tag, childAttachedDeviceTag,
++                                    reinterpret_cast<const char*>(attachedDevice.get()));
++                        }
+                     }
+                 }
+             }
+@@ -675,6 +979,14 @@ Return<ModuleTraits::Element> ModuleTraits::deserialize(const xmlNode *cur, PtrS
+             }
+         }
+     }
++
++    if(fixedEarpieceChannels) {
++        sp<DeviceDescriptor> device =
++            module->getDeclaredDevices().getDeviceFromTagName("Earpiece");
++        if(device != 0)
++            ctx->addDevice(device);
++        fixedEarpieceChannels = false;
++    }
+     return module;
+ }
+ 
+@@ -804,6 +1116,7 @@ status_t PolicySerializer::deserialize(const char *configFile, AudioPolicyConfig
+ status_t deserializeAudioPolicyFile(const char *fileName, AudioPolicyConfig *config)
+ {
+     PolicySerializer serializer;
++    forceDisableA2dpOffload = property_get_bool("persist.sys.phh.disable_a2dp_offload", false);
+     return serializer.deserialize(fileName, config);
+ }
+ 
+diff --git a/services/audiopolicy/engine/common/src/EngineBase.cpp b/services/audiopolicy/engine/common/src/EngineBase.cpp
+index 1bc7fe3..fe18d0d 100644
+--- a/services/audiopolicy/engine/common/src/EngineBase.cpp
++++ b/services/audiopolicy/engine/common/src/EngineBase.cpp
+@@ -206,9 +206,9 @@ engineConfig::ParsingResult EngineBase::loadAudioPolicyEngineConfig()
+             }
+             if (group.stream != AUDIO_STREAM_DEFAULT) {
+                 // A legacy stream can be assigned once to a volume group
+-                LOG_ALWAYS_FATAL_IF(checkStreamForGroups(group.stream, mVolumeGroups),
+-                                    "stream %s already assigned to a volume group, "
+-                                    "review the configuration", toString(group.stream).c_str());
++                if(checkStreamForGroups(group.stream, mVolumeGroups)) {
++                    ALOGE("stream %s already assigned to a volume group, review the configuration", toString(group.stream).c_str());
++                }
+                 volumeGroup->addSupportedStream(group.stream);
+             }
+             addSupportedAttributesToGroup(group, volumeGroup, strategy);
+diff --git a/services/audiopolicy/engine/config/src/EngineConfig.cpp b/services/audiopolicy/engine/config/src/EngineConfig.cpp
+index 4842cb2..e8d6917 100644
+--- a/services/audiopolicy/engine/config/src/EngineConfig.cpp
++++ b/services/audiopolicy/engine/config/src/EngineConfig.cpp
+@@ -717,11 +717,17 @@ android::status_t parseLegacyVolumes(VolumeGroups &volumeGroups) {
+             snprintf(audioPolicyXmlConfigFile, sizeof(audioPolicyXmlConfigFile),
+                      "%s/%s", path.c_str(), fileName);
+             ret = parseLegacyVolumeFile(audioPolicyXmlConfigFile, volumeGroups);
+-            if (ret == NO_ERROR) {
++            ALOGE("Parsing volume for %s gave %zu", audioPolicyXmlConfigFile, volumeGroups.size());
++            if (ret == NO_ERROR && volumeGroups.size() > 0) {
+                 return ret;
+             }
+         }
+     }
++    ret = parseLegacyVolumeFile("/system/etc/fake_audio_policy_volume.xml", volumeGroups);
++    ALOGE("Parsing volume for /system/etc/fake_audio_policy_volume.xml gave %zu",  volumeGroups.size());
++    if (ret == NO_ERROR && volumeGroups.size() == 0) {
++        return ret;
++    }
+     return BAD_VALUE;
+ }
+ 
+diff --git a/services/audiopolicy/managerdefault/AudioPolicyManager.cpp b/services/audiopolicy/managerdefault/AudioPolicyManager.cpp
+index a592dea..124c6ca 100644
+--- a/services/audiopolicy/managerdefault/AudioPolicyManager.cpp
++++ b/services/audiopolicy/managerdefault/AudioPolicyManager.cpp
+@@ -93,6 +93,8 @@ bool operator!= (const SortedVector<T> &left, const SortedVector<T> &right)
+     return !(left == right);
+ }
+ 
++static bool forceDisableA2dpOffload = false;
++
+ // ----------------------------------------------------------------------------
+ // AudioPolicyInterface implementation
+ // ----------------------------------------------------------------------------
+@@ -573,17 +575,30 @@ uint32_t AudioPolicyManager::updateCallRouting(const DeviceVector &rxDevices, ui
+         createTxPatch = !(availablePrimaryModuleInputDevices().contains(txSourceDevice)) &&
+                 (txSinkDevice != 0);
+     }
+-    // Use legacy routing method for voice calls via setOutputDevice() on primary output.
+-    // Otherwise, create two audio patches for TX and RX path.
+-    if (!createRxPatch) {
+-        muteWaitMs = setOutputDevices(mPrimaryOutput, rxDevices, true, delayMs);
+-    } else { // create RX path audio patch
++    if (createRxPatch) { // create RX path audio patch
+         mCallRxPatch = createTelephonyPatch(true /*isRx*/, rxDevices.itemAt(0), delayMs);
+ 
++        if (mCallRxPatch == nullptr) {
++            // Fall back to legacy routing for voice calls if the new patching method
++            // failed. setOutputDevice() will take care of TX in this case, so don't
++            // create the TX patch either.
++            // This is seen on some MT6771 devices on Q vendor, where the HAL claims
++            // support for HW patch between telephony inputs and outputs, but fails
++            // to create one when called with the createAudioPatch() method. SW audio
++            // bridges are also broken on them due to improperly configured audio policy.
++            ALOGW("Failed to create RX path audio patch, falling back to pre-R behavior");
++            createRxPatch = false;
++            createTxPatch = false;
++        }
++
+         // If the TX device is on the primary HW module but RX device is
+         // on other HW module, SinkMetaData of telephony input should handle it
+         // assuming the device uses audio HAL V5.0 and above
+     }
++    // Use legacy routing method for voice calls via setOutputDevice() on primary output.
++    if (!createRxPatch) {
++        muteWaitMs = setOutputDevices(mPrimaryOutput, rxDevices, true, delayMs);
++    }
+     if (createTxPatch) { // create TX path audio patch
+         // terminate active capture if on the same HW module as the call TX source device
+         // FIXME: would be better to refine to only inputs whose profile connects to the
+@@ -4462,6 +4477,7 @@ static status_t deserializeAudioPolicyXmlConfig(AudioPolicyConfig &config) {
+     } else if (property_get_bool("persist.bluetooth.bluetooth_audio_hal.disabled", false)) {
+         fileNames.push_back(AUDIO_POLICY_BLUETOOTH_LEGACY_HAL_XML_CONFIG_FILE_NAME);
+     }
++    forceDisableA2dpOffload = property_get_bool("persist.sys.phh.disable_a2dp_offload", false);
+     fileNames.push_back(AUDIO_POLICY_XML_CONFIG_FILE_NAME);
+ 
+     for (const char* fileName : fileNames) {
+diff --git a/services/camera/libcameraservice/Android.bp b/services/camera/libcameraservice/Android.bp
+index 92e9817..aa15e14 100644
+--- a/services/camera/libcameraservice/Android.bp
++++ b/services/camera/libcameraservice/Android.bp
+@@ -132,7 +132,9 @@ cc_library_shared {
+         "android.hardware.camera.device@3.3",
+         "android.hardware.camera.device@3.4",
+         "android.hardware.camera.device@3.5",
+-        "android.hardware.camera.device@3.6"
++        "android.hardware.camera.device@3.6",
++        "vendor.samsung.hardware.camera.provider@3.0",
++        "vendor.samsung.hardware.camera.provider@4.0",
+     ],
+ 
+     static_libs: [
+diff --git a/services/camera/libcameraservice/CameraService.cpp b/services/camera/libcameraservice/CameraService.cpp
+index c08810f..bb0be79 100644
+--- a/services/camera/libcameraservice/CameraService.cpp
++++ b/services/camera/libcameraservice/CameraService.cpp
+@@ -16,7 +16,7 @@
+ 
+ #define LOG_TAG "CameraService"
+ #define ATRACE_TAG ATRACE_TAG_CAMERA
+-//#define LOG_NDEBUG 0
++#define LOG_NDEBUG 0
+ 
+ #include <algorithm>
+ #include <climits>
+@@ -25,6 +25,7 @@
+ #include <ctime>
+ #include <string>
+ #include <sys/types.h>
++#include <sys/wait.h>
+ #include <inttypes.h>
+ #include <pthread.h>
+ 
+@@ -139,6 +140,7 @@ Mutex CameraService::sProxyMutex;
+ sp<hardware::ICameraServiceProxy> CameraService::sCameraServiceProxy;
+ 
+ CameraService::CameraService() :
++        mPhysicalFrontCamStatus(false),
+         mEventLog(DEFAULT_EVENT_LOG_LENGTH),
+         mNumberOfCameras(0),
+         mNumberOfCamerasWithoutSystemCamera(0),
+@@ -221,8 +223,23 @@ status_t CameraService::enumerateProviders() {
+ 
+     for (auto& cameraId : deviceIds) {
+         String8 id8 = String8(cameraId.c_str());
+-        if (getCameraState(id8) == nullptr) {
++        if (property_get_bool("persist.sys.camera.huawei", false)) {
++            bool cameraFound = false;
++            {
++                Mutex::Autolock lock(mCameraStatesLock);
++                auto iter = mCameraStates.find(id8);
++                if (iter != mCameraStates.end()) {
++                    cameraFound = true;
++                }
++            }
++            if (!cameraFound) {
++                addStates(id8);
++            }
+             onDeviceStatusChanged(id8, CameraDeviceStatus::PRESENT);
++        } else {
++            if (getCameraState(id8) == nullptr) {
++                onDeviceStatusChanged(id8, CameraDeviceStatus::PRESENT);
++            }
+         }
+     }
+ 
+@@ -307,7 +324,7 @@ status_t CameraService::getSystemCameraKind(const String8& cameraId, SystemCamer
+ }
+ 
+ void CameraService::updateCameraNumAndIds() {
+-    Mutex::Autolock l(mServiceLock);
++    //Mutex::Autolock l(mServiceLock);
+     std::pair<int, int> systemAndNonSystemCameras = mCameraProviderManager->getCameraCount();
+     // Excludes hidden secure cameras
+     mNumberOfCameras =
+@@ -343,7 +360,7 @@ void CameraService::addStates(const String8 id) {
+                                                                 conflicting, deviceKind));
+     }
+ 
+-    if (mFlashlight->hasFlashUnit(id)) {
++    if (mFlashlight != nullptr && mFlashlight->hasFlashUnit(id)) {
+         Mutex::Autolock al(mTorchStatusMutex);
+         mTorchStatusMap.add(id, TorchModeStatus::AVAILABLE_OFF);
+ 
+@@ -381,8 +398,10 @@ void CameraService::onDeviceStatusChanged(const String8& id,
+             ALOGI("%s: Unknown camera ID %s, a new camera is added",
+                     __FUNCTION__, id.string());
+ 
++   if (!property_get_bool("persist.sys.camera.huawei", false)) {
+             // First add as absent to make sure clients are notified below
+             addStates(id);
++   }
+ 
+             updateStatus(newStatus, id);
+         } else {
+@@ -1796,6 +1815,7 @@ Status CameraService::connectHelper(const sp<CALLBACK>& cameraCb, const String8&
+             mServiceLock.lock();
+         } else {
+             // Otherwise, add client to active clients list
++            physicalFrontCam(cameraId == "1");
+             finishConnectLocked(client, partial);
+         }
+     } // lock is destroyed, allow further connect calls
+@@ -1877,6 +1897,27 @@ status_t CameraService::addOfflineClient(String8 cameraId, sp<BasicClient> offli
+     return OK;
+ }
+ 
++void CameraService::physicalFrontCam(bool on) {
++    if(on == mPhysicalFrontCamStatus) return;
++    mPhysicalFrontCamStatus = on;
++
++    if(access("/dev/asusMotoDrv", F_OK) == 0) {
++        int pid = fork();
++        if(pid == 0) {
++            const char* cmd[] = {
++                "/system/bin/asus-motor",
++                "0",
++                NULL
++            };
++            cmd[1] = on ? "0" : "1";
++            execve("/system/bin/asus-motor", (char**)cmd, environ);
++            _exit(1);
++        } else {
++            waitpid(pid, NULL, 0);
++        }
++    }
++}
++
+ Status CameraService::setTorchMode(const String16& cameraId, bool enabled,
+         const sp<IBinder>& clientBinder) {
+     Mutex::Autolock lock(mServiceLock);
+@@ -2865,6 +2906,8 @@ binder::Status CameraService::BasicClient::disconnect() {
+     }
+     mDisconnected = true;
+ 
++    sCameraService->physicalFrontCam(false);
++
+     sCameraService->removeByClient(this);
+     sCameraService->logDisconnected(mCameraIdStr, mClientPid, String8(mClientPackageName));
+     sCameraService->mCameraProviderManager->removeRef(CameraProviderManager::DeviceMode::CAMERA,
+diff --git a/services/camera/libcameraservice/CameraService.h b/services/camera/libcameraservice/CameraService.h
+index 7c3c05b..5ae7a47 100644
+--- a/services/camera/libcameraservice/CameraService.h
++++ b/services/camera/libcameraservice/CameraService.h
+@@ -211,6 +211,9 @@ public:
+     // Register an offline client for a given active camera id
+     status_t addOfflineClient(String8 cameraId, sp<BasicClient> offlineClient);
+ 
++    bool mPhysicalFrontCamStatus;
++    void physicalFrontCam(bool on);
++
+     /////////////////////////////////////////////////////////////////////
+     // Client functionality
+ 
+diff --git a/services/camera/libcameraservice/common/CameraProviderManager.cpp b/services/camera/libcameraservice/common/CameraProviderManager.cpp
+index 230abb7..06302e1 100644
+--- a/services/camera/libcameraservice/common/CameraProviderManager.cpp
++++ b/services/camera/libcameraservice/common/CameraProviderManager.cpp
+@@ -21,6 +21,8 @@
+ #include "CameraProviderManager.h"
+ 
+ #include <android/hardware/camera/device/3.5/ICameraDevice.h>
++#include <vendor/samsung/hardware/camera/provider/3.0/ISehCameraProvider.h>
++#include <vendor/samsung/hardware/camera/provider/4.0/ISehCameraProvider.h>
+ 
+ #include <algorithm>
+ #include <chrono>
+@@ -182,7 +184,9 @@ std::vector<std::string> CameraProviderManager::getAPI1CompatibleCameraDeviceIds
+         // API1 app doesn't handle logical and physical camera devices well. So
+         // for each camera facing, only take the first id advertised by HAL in
+         // all [logical, physical1, physical2, ...] id combos, and filter out the rest.
+-        filterLogicalCameraIdsLocked(providerDeviceIds);
++        if(!property_get_bool("persist.sys.phh.include_all_cameras", false)) {
++            filterLogicalCameraIdsLocked(providerDeviceIds);
++        }
+         collectDeviceIdsLocked(providerDeviceIds, publicDeviceIds, systemDeviceIds);
+     }
+     auto sortFunc =
+@@ -614,10 +618,12 @@ SystemCameraKind CameraProviderManager::ProviderInfo::DeviceInfo3::getSystemCame
+ 
+     // Go through the capabilities and check if it has
+     // ANDROID_REQUEST_AVAILABLE_CAPABILITIES_SYSTEM_CAMERA
+-    for (size_t i = 0; i < entryCap.count; ++i) {
+-        uint8_t capability = entryCap.data.u8[i];
+-        if (capability == ANDROID_REQUEST_AVAILABLE_CAPABILITIES_SYSTEM_CAMERA) {
+-            return SystemCameraKind::SYSTEM_ONLY_CAMERA;
++    if(!property_get_bool("persist.sys.phh.include_all_cameras", false)) {
++        for (size_t i = 0; i < entryCap.count; ++i) {
++            uint8_t capability = entryCap.data.u8[i];
++            if (capability == ANDROID_REQUEST_AVAILABLE_CAPABILITIES_SYSTEM_CAMERA) {
++                return SystemCameraKind::SYSTEM_ONLY_CAMERA;
++            }
+         }
+     }
+     return SystemCameraKind::PUBLIC;
+@@ -1330,6 +1336,7 @@ status_t CameraProviderManager::ProviderInfo::initialize(
+             mMinorVersion = 6;
+         }
+     }
++
+     // We need to check again since cast2_6.isOk() succeeds even if the provider
+     // version isn't actually 2.6.
+     if (interface2_6 == nullptr){
+@@ -1358,6 +1365,11 @@ status_t CameraProviderManager::ProviderInfo::initialize(
+         return mapToStatusT(status);
+     }
+ 
++    auto samsungCast = vendor::samsung::hardware::camera::provider::V3_0::ISehCameraProvider::castFrom(interface);
++    auto samsung40Cast = vendor::samsung::hardware::camera::provider::V4_0::ISehCameraProvider::castFrom(interface);
++    auto samsungProvider = samsungCast.isOk() ? static_cast<sp<vendor::samsung::hardware::camera::provider::V3_0::ISehCameraProvider>>(samsungCast) : nullptr;
++    auto samsung40Provider = samsung40Cast.isOk() ? static_cast<sp<vendor::samsung::hardware::camera::provider::V4_0::ISehCameraProvider>>(samsung40Cast) : nullptr;
++
+     hardware::Return<bool> linked = interface->linkToDeath(this, /*cookie*/ mId);
+     if (!linked.isOk()) {
+         ALOGE("%s: Transaction error in linking to camera provider '%s' death: %s",
+@@ -1388,12 +1400,13 @@ status_t CameraProviderManager::ProviderInfo::initialize(
+ 
+     // Get initial list of camera devices, if any
+     std::vector<std::string> devices;
+-    hardware::Return<void> ret = interface->getCameraIdList([&status, this, &devices](
++    auto cb = [&status, this, &devices](
+             Status idStatus,
+             const hardware::hidl_vec<hardware::hidl_string>& cameraDeviceNames) {
+         status = idStatus;
+         if (status == Status::OK) {
+             for (auto& name : cameraDeviceNames) {
++		    ALOGE("Listing camera ID %s", name.c_str());
+                 uint16_t major, minor;
+                 std::string type, id;
+                 status_t res = parseDeviceName(name, &major, &minor, &type, &id);
+@@ -1405,7 +1418,14 @@ status_t CameraProviderManager::ProviderInfo::initialize(
+                     mProviderPublicCameraIds.push_back(id);
+                 }
+             }
+-        } });
++        } };
++    hardware::Return<void> ret;
++    if(samsung40Provider != nullptr && property_get_bool("persist.sys.phh.samsung.camera_ids", false))
++        ret = samsung40Provider->sehGetCameraIdList(cb);
++    else if(samsungProvider != nullptr && property_get_bool("persist.sys.phh.samsung.camera_ids", false))
++        ret = samsungProvider->sehGetCameraIdList(cb);
++    else
++        ret = interface->getCameraIdList(cb);
+     if (!ret.isOk()) {
+         ALOGE("%s: Transaction error in getting camera ID list from provider '%s': %s",
+                 __FUNCTION__, mProviderName.c_str(), linked.description().c_str());
+diff --git a/services/camera/libcameraservice/device3/Camera3Device.cpp b/services/camera/libcameraservice/device3/Camera3Device.cpp
+index fc3a5b4..3db7bc6 100644
+--- a/services/camera/libcameraservice/device3/Camera3Device.cpp
++++ b/services/camera/libcameraservice/device3/Camera3Device.cpp
+@@ -316,8 +316,16 @@ status_t Camera3Device::initializeCommonLocked() {
+     // Measure the clock domain offset between camera and video/hw_composer
+     camera_metadata_entry timestampSource =
+             mDeviceInfo.find(ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE);
+-    if (timestampSource.count > 0 && timestampSource.data.u8[0] ==
+-            ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME) {
++    int timestampSourceValue = 0;
++    if ((timestampSource.count > 0 && timestampSource.data.u8[0] ==
++            ANDROID_SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME)) {
++        timestampSourceValue = 1;
++    }
++    int forceTimestampSource = property_get_int32("persist.sys.phh.camera.force_timestampsource", -1);
++    //Don't override if it's -1, default value
++    if(forceTimestampSource == 0) timestampSourceValue = 0;
++    if(forceTimestampSource == 1) timestampSourceValue = 1;
++    if (timestampSourceValue == 1) {
+         mTimestampOffset = getMonoToBoottimeOffset();
+     }
+ 

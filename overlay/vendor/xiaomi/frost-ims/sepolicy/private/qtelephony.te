@@ -1,0 +1,8 @@
+# IMS subset of the stock/QTI app domain; vendor grants use the public mapping.
+typeattribute vendor_qtelephony coredomain;
+app_domain(vendor_qtelephony)
+hwbinder_use(vendor_qtelephony)
+get_prop(vendor_qtelephony, hwservicemanager_prop)
+hal_client_domain(vendor_qtelephony, hal_telephony)
+allow vendor_qtelephony { cameraserver_service mediaextractor_service mediaserver_service mediametrics_service radio_service drmserver_service audioserver_service }:service_manager find;
+allow vendor_qtelephony { system_api_service app_api_service }:service_manager find;

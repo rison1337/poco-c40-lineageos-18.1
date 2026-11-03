@@ -1,0 +1,2 @@
+ro.adb.root_default u:object_r:exported3_default_prop:s0 exact bool
+persist.sys.c40.adb_initialized u:object_r:exported3_default_prop:s0 exact bool

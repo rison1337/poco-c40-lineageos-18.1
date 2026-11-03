@@ -1,0 +1,98 @@
+[
+  {
+    "source": "/system_ext/lib/libimscamera_jni.so",
+    "bytes": 9276,
+    "sha256": "7bc92341a3f2292ad5b1de8e13089ef1b6086797aa5d25439ae23926c12cefe3"
+  },
+  {
+    "source": "/system_ext/lib/libimsmedia_jni.so",
+    "bytes": 17200,
+    "sha256": "3923849cfc0d1419098ba0b67801fd5dcddb5ac74f1c385ad07d78cb14c1c0f2"
+  },
+  {
+    "source": "/system_ext/lib/lib-imsvideocodec.so",
+    "bytes": 112188,
+    "sha256": "7ed7ce8543a4625f4e3a55cdd3ba52836f308c565e0227c7a197a8a8d1611f1a"
+  },
+  {
+    "source": "/system_ext/lib/lib-imsvt.so",
+    "bytes": 160884,
+    "sha256": "0e95024ed3aed8e2517bcb9a3f1761c930781a6e411643ab50c108e774929352"
+  },
+  {
+    "source": "/system_ext/lib/lib-imsvtextutils.so",
+    "bytes": 5224,
+    "sha256": "fed8750040a99bbe08723bdb3e0d2a9346c5d8ec916a81ac71ee82e36d2f5630"
+  },
+  {
+    "source": "/system_ext/lib/lib-imsvtutils.so",
+    "bytes": 18624,
+    "sha256": "da3999be36d0d745a6d94a4f23b53661ed5ab46933cd5a243623a1f298950cf7"
+  },
+  {
+    "source": "/system_ext/lib64/libimscamera_jni.so",
+    "bytes": 20592,
+    "sha256": "4c7723fd2937558379f251f6a6cee2511dad4710ead3b2629221d82c42324123"
+  },
+  {
+    "source": "/system_ext/lib64/libimsmedia_jni.so",
+    "bytes": 29984,
+    "sha256": "d2610913ac0aae877fdd49b83030b653739889138e22c02c62db1622c322c959"
+  },
+  {
+    "source": "/system_ext/lib64/lib-imsvideocodec.so",
+    "bytes": 132584,
+    "sha256": "2815abe9f4f3114cb2be707ee407eff5f87764ee1aad2808798a69c3f2c5b4b2"
+  },
+  {
+    "source": "/system_ext/lib64/lib-imsvt.so",
+    "bytes": 225640,
+    "sha256": "03a0b207e126b93de9a6d40b7a506b144fb36a2452479cc7ae0e8894e7d397b4"
+  },
+  {
+    "source": "/system_ext/lib64/lib-imsvtextutils.so",
+    "bytes": 15704,
+    "sha256": "8355df02d6841a10d311dc7728d2043cf61ddeb0de0bf83345bb39011a74372c"
+  },
+  {
+    "source": "/system_ext/lib64/lib-imsvtutils.so",
+    "bytes": 29504,
+    "sha256": "d4049d6f61cd3319ecccf204670480232a6ece3b69087ce63768f8bb4c31cd2a"
+  },
+  {
+    "source": "/system_ext/lib/libdiag_system.so",
+    "bytes": 196916,
+    "sha256": "b6213e5aecf112a53192fea854ee57b6ecaeedf3f8036737a186c59a1e37e8cb"
+  },
+  {
+    "source": "/system_ext/lib/vendor.qti.imsrtpservice@3.0.so",
+    "bytes": 144784,
+    "sha256": "52161fa4ad3e6a7fced92d2b49e1844ba56efb0c09f5695d466ee084f29952ab"
+  },
+  {
+    "source": "/system_ext/lib64/libdiag_system.so",
+    "bytes": 252712,
+    "sha256": "cce352aa1a1337b5023a70102c7ef697ab9f676980134f45902d5e0f3ec3e443"
+  },
+  {
+    "source": "/system_ext/lib64/vendor.qti.imsrtpservice@3.0.so",
+    "bytes": 242448,
+    "sha256": "e1180a6e71cf772f5637114d54f676ddd8d772293aabd5f2b6f560eb87cbf9e3"
+  },
+  {
+    "source": "/system_ext/lib/vendor.qti.diaghal@1.0.so",
+    "bytes": 83240,
+    "sha256": "1ac61e4323149ec4a673e1e208cbc264c3bc7e7958f8498dcb56763fbf0f8309"
+  },
+  {
+    "source": "/system_ext/lib64/vendor.qti.diaghal@1.0.so",
+    "bytes": 118408,
+    "sha256": "4e7e0f3ec9805f0661da4debf6dcd3cf961392948fd8337789dc314b9c0d7376"
+  },
+  {
+    "source": "/system_ext/priv-app/ims/ims.apk",
+    "local": "ims.apk",
+    "bytes": 1221370,
+    "sha256": "eaf867a781c2b20fdca3076f1611315480bdb0db22b43e05c12a31d9c4219693"
+  }
+]

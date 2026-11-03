@@ -1,0 +1,14 @@
+# POCO C40 device initialization; no personal USB debugging defaults.
+# Vendor starts an all-interface tcpdump on this same CE-ready event.
+# Queue a separate event so the stop runs after all CE-ready actions,
+# regardless of import order. Keep native Android crash/ANR logs available.
+on property:sys.user.0.ce_available=true && property:ro.product.vendor.device=frost
+    trigger c40-stop-vendor-packet-logging
+
+on c40-stop-vendor-packet-logging
+    stop vendor.tcpdump
+
+# The post-fs PHH script runs before persisted properties are loaded.
+# Apply frost's verified 11-bit scalar HAL transport after that load.
+on property:ro.persistent_properties.ready=true && property:ro.product.vendor.device=frost
+    exec u:r:phhsu_daemon:s0 root -- /system/bin/sh -c "if /system/bin/grep -qx 2047 /sys/class/leds/lcd-backlight/max_brightness; then /system/bin/setprop persist.sys.qcom-brightness 2047; fi"

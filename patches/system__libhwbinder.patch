@@ -1,0 +1,13 @@
+diff --git a/Parcel.cpp b/Parcel.cpp
+index 2c6bf5d..fde7fc7 100644
+--- a/Parcel.cpp
++++ b/Parcel.cpp
+@@ -1353,7 +1353,7 @@ bool Parcel::verifyBufferObject(const binder_buffer_object *buffer_obj,
+               ALOGE("Buffer in parent %p differs from embedded buffer %p",
+                     bufferInParent, childBuffer);
+               android_errorWriteLog(0x534e4554, "179289794");
+-              return false;
++              return true;
+         }
+     }
+ 

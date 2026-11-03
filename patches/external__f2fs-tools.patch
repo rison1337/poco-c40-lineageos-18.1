@@ -1,0 +1,243 @@
+diff --git a/Android.bp b/Android.bp
+index 0fa3305..1035d6b 100644
+--- a/Android.bp
++++ b/Android.bp
+@@ -259,3 +259,12 @@ cc_binary {
+         "tools/fibmap.c",
+     ],
+ }
++
++// Host-only clone experiment, never an Android package or installed fsck replacement.
++cc_binary_host {
++    name: "c40_resize_f2fs",
++    defaults: ["f2fs-tools-defaults", "fsck_main_src_files"],
++    cflags: ["-DWITH_RESIZE", "-DWITH_DEFRAG", "-DWITH_DUMP", "-DC40_FBE_RELOCATION_LOG"],
++    srcs: ["fsck/fsck.c", "fsck/resize.c", "fsck/defrag.c", "fsck/c40_f2fs_relocation.c"],
++    shared_libs: ["libext2_uuid", "libsparse", "libbase"],
++}
+diff --git a/fsck/c40_f2fs_relocation.c b/fsck/c40_f2fs_relocation.c
+new file mode 100644
+index 0000000..d26c134
+--- /dev/null
++++ b/fsck/c40_f2fs_relocation.c
+@@ -0,0 +1,109 @@
++/* Host-only analysis of a regular-file clone; never installed into Android. */
++#include "fsck.h"
++#include "c40_f2fs_relocation.h"
++#include <fcntl.h>
++#include <sys/stat.h>
++#include <unistd.h>
++
++static FILE *journal;
++static u64 expected,records,fbe_count,data_count,node_count;
++static block_t old_main,new_main;
++static int inventory_mode;
++
++int c40_relocation_preflight(void)
++{
++    const char *source=getenv("C40_FBE_SOURCE_VIEW"),*log=getenv("C40_FBE_RELOCATION_LOG");
++    struct stat original,clone;
++    unsigned char before[8192],after[8192];
++    int src=-1,dst=-1,fd=-1,ok=0;
++    umask(0077);
++    inventory_mode=c.func==DUMP;
++    if((c.func!=RESIZE && !inventory_mode) || c.safe_resize || c.sparse_mode || !source || !log || !c.devices[0].path)goto out;
++    if(inventory_mode){c.ro=1;c.dry_run=1;c.no_kernel_check=1;c.quota_fix=0;}
++    src=open(source,O_RDONLY|O_CLOEXEC|O_NOFOLLOW);
++    dst=open(c.devices[0].path,O_RDONLY|O_CLOEXEC|O_NOFOLLOW);
++    if(src<0 || dst<0 || fstat(src,&original) || fstat(dst,&clone) ||
++       !S_ISREG(original.st_mode) || !S_ISREG(clone.st_mode) ||
++       (!inventory_mode && ((original.st_dev==clone.st_dev && original.st_ino==clone.st_ino) || clone.st_size<=original.st_size)))goto out;
++    if(pread(src,before,sizeof(before),0)!=sizeof(before) || pread(dst,after,sizeof(after),0)!=sizeof(after) ||
++       memcmp(before,after,sizeof(before)))goto out;
++    fd=open(log,O_WRONLY|O_CREAT|O_EXCL|O_CLOEXEC|O_NOFOLLOW,0600);
++    if(fd<0)goto out;
++    journal=fdopen(fd,"w");
++    if(!journal){close(fd);goto out;}
++    ok=1;
++out:
++    if(src>=0)close(src);
++    if(dst>=0)close(dst);
++    if(!ok)fprintf(stderr,"C40: require distinct regular-file clone/source, matching superblocks and new private log; full grow only\n");
++    return ok?0:-1;
++}
++
++void c40_relocation_begin(struct f2fs_sb_info *sbi,unsigned int from,unsigned int to)
++{
++    struct f2fs_super_block *sb=F2FS_RAW_SUPER(sbi);
++    unsigned int i,j;
++    ASSERT(journal!=NULL && c.ndevs==1 && to>=from);
++    /* Compression is unsupported by the actual C40 kernel and this tools generation. */
++    ASSERT(!(le32_to_cpu(sb->feature)&0x2000));
++    old_main=from;new_main=to;
++    expected=records=fbe_count=data_count=node_count=0;
++    for(i=0;i<TOTAL_SEGS(sbi);i++){
++        struct seg_entry *se=get_seg_entry(sbi,i);
++        unsigned int bits=0;
++        for(j=0;j<sbi->blocks_per_seg;j++)bits+=!!f2fs_test_bit(j,(const char *)se->cur_valid_map);
++        ASSERT(bits==se->valid_blocks);
++        expected+=bits;
++    }
++    ASSERT(fprintf(journal,"{\"type\":\"header\",\"version\":1,\"operation\":\"%s\",\"block_bytes\":4096,\"source_main\":%u,\"target_main\":%u,\"expected_records\":%"PRIu64",\"checkpoint_clean\":%s,\"forced_full_main_migration\":%s}\n",
++        inventory_mode?"inventory":"grow",from,to,expected,is_set_ckpt_flags(F2FS_CKPT(sbi),CP_UMOUNT_FLAG)?"true":"false",inventory_mode?"false":"true")>0);
++}
++
++void c40_relocation_record(struct f2fs_sb_info *sbi,block_t from,block_t to,int data,const struct f2fs_summary *sum)
++{
++    char kind='N';nid_t ino=0;
++    ASSERT(journal!=NULL && to-from==new_main-old_main);
++    if(data){
++        struct node_info owner,inode;
++        struct f2fs_node raw;
++        get_node_info(sbi,le32_to_cpu(sum->nid),&owner);
++        ASSERT(owner.ino>0 && owner.ino<NM_I(sbi)->max_nid);
++        get_node_info(sbi,owner.ino,&inode);
++        ASSERT(inode.blk_addr!=NULL_ADDR && inode.blk_addr!=NEW_ADDR);
++        ASSERT(dev_read_block(&raw,inode.blk_addr)>=0);
++        ASSERT(le32_to_cpu(raw.footer.nid)==owner.ino && le32_to_cpu(raw.footer.ino)==owner.ino);
++        ino=owner.ino;
++        /* Exactly the kernel's IS_ENCRYPTED(inode) && S_ISREG(inode->i_mode). */
++        kind=(LINUX_S_ISREG(le16_to_cpu(raw.i.i_mode)) && file_is_encrypt(&raw.i))?'F':'D';
++    }
++    ASSERT(fprintf(journal,"{\"type\":\"block\",\"kind\":\"%c\",\"from\":%u,\"to\":%u,\"ino\":%u,\"nid\":%u}\n",kind,from,to,ino,le32_to_cpu(sum->nid))>0);
++    records++;
++    if(kind=='F')fbe_count++;
++    else if(kind=='D')data_count++;
++    else node_count++;
++}
++
++void c40_relocation_finish(void)
++{
++    ASSERT(records==expected);
++    ASSERT(fprintf(journal,"{\"type\":\"complete\",\"records\":%"PRIu64",\"fbe_blocks\":%"PRIu64",\"other_data_blocks\":%"PRIu64",\"node_blocks\":%"PRIu64"}\n",records,fbe_count,data_count,node_count)>0);
++    ASSERT(fflush(journal)==0 && fsync(fileno(journal))==0);
++    ASSERT(fclose(journal)==0);journal=NULL;
++}
++
++void c40_relocation_inventory(struct f2fs_sb_info *sbi)
++{
++    struct f2fs_super_block *sb=F2FS_RAW_SUPER(sbi);
++    unsigned int i,j;
++    c40_relocation_begin(sbi,le32_to_cpu(sb->main_blkaddr),le32_to_cpu(sb->main_blkaddr));
++    for(i=0;i<TOTAL_SEGS(sbi);i++){
++        struct seg_entry *se=get_seg_entry(sbi,i);
++        for(j=0;j<sbi->blocks_per_seg;j++){
++            struct f2fs_summary sum;block_t block;
++            if(!f2fs_test_bit(j,(const char *)se->cur_valid_map))continue;
++            block=START_BLOCK(sbi,i)+j;get_sum_entry(sbi,block,&sum);
++            c40_relocation_record(sbi,block,block,IS_DATASEG(se->type),&sum);
++        }
++    }
++    c40_relocation_finish();
++}
+diff --git a/fsck/c40_f2fs_relocation.h b/fsck/c40_f2fs_relocation.h
+new file mode 100644
+index 0000000..5e863b6
+--- /dev/null
++++ b/fsck/c40_f2fs_relocation.h
+@@ -0,0 +1,8 @@
++#ifndef C40_F2FS_RELOCATION_H
++#define C40_F2FS_RELOCATION_H
++int c40_relocation_preflight(void);
++void c40_relocation_begin(struct f2fs_sb_info *, unsigned int, unsigned int);
++void c40_relocation_record(struct f2fs_sb_info *, block_t, block_t, int, const struct f2fs_summary *);
++void c40_relocation_finish(void);
++void c40_relocation_inventory(struct f2fs_sb_info *);
++#endif
+diff --git a/fsck/main.c b/fsck/main.c
+index 9a1596f..f1141a7 100644
+--- a/fsck/main.c
++++ b/fsck/main.c
+@@ -19,6 +19,9 @@
+  * published by the Free Software Foundation.
+  */
+ #include "fsck.h"
++#ifdef C40_FBE_RELOCATION_LOG
++#include "c40_f2fs_relocation.h"
++#endif
+ #include <libgen.h>
+ #include <ctype.h>
+ #include <time.h>
+@@ -829,6 +832,9 @@ int main(int argc, char **argv)
+ 	f2fs_init_configuration();
+ 
+ 	f2fs_parse_options(argc, argv);
++#ifdef C40_FBE_RELOCATION_LOG
++	if (c40_relocation_preflight()) return 2;
++#endif
+ 
+ 	if (c.func != DUMP && f2fs_devs_are_umounted() < 0) {
+ 		if (errno == EBUSY) {
+@@ -877,7 +883,11 @@ fsck_again:
+ 		break;
+ #ifdef WITH_DUMP
+ 	case DUMP:
++#ifdef C40_FBE_RELOCATION_LOG
++		c40_relocation_inventory(sbi);
++#else
+ 		do_dump(sbi);
++#endif
+ 		break;
+ #endif
+ #ifdef WITH_DEFRAG
+diff --git a/fsck/resize.c b/fsck/resize.c
+index 46b1cfb..1e26117 100644
+--- a/fsck/resize.c
++++ b/fsck/resize.c
+@@ -8,6 +8,9 @@
+  * published by the Free Software Foundation.
+  */
+ #include "fsck.h"
++#ifdef C40_FBE_RELOCATION_LOG
++#include "c40_f2fs_relocation.h"
++#endif
+ 
+ static int get_new_sb(struct f2fs_super_block *sb)
+ {
+@@ -183,6 +186,11 @@ static void migrate_main(struct f2fs_sb_info *sbi, unsigned int offset)
+ 				continue;
+ 
+ 			from = START_BLOCK(sbi, i) + j;
++#ifdef C40_FBE_RELOCATION_LOG
++			get_sum_entry(sbi, from, &sum);
++			to = from + offset;
++			c40_relocation_record(sbi, from, to, IS_DATASEG(se->type), &sum);
++#endif
+ 			ret = dev_read_block(raw, from);
+ 			ASSERT(ret >= 0);
+ 
+@@ -614,10 +622,14 @@ static int f2fs_resize_grow(struct f2fs_sb_info *sbi)
+ 	old_main_blkaddr = get_sb(main_blkaddr);
+ 	new_main_blkaddr = get_newsb(main_blkaddr);
+ 	offset = new_main_blkaddr - old_main_blkaddr;
++#ifdef C40_FBE_RELOCATION_LOG
++	c40_relocation_begin(sbi, old_main_blkaddr, new_main_blkaddr);
++#endif
+ 	end_blkaddr = (get_sb(segment_count_main) <<
+ 			get_sb(log_blocks_per_seg)) + get_sb(main_blkaddr);
+ 
+ 	err = -EAGAIN;
++#ifndef C40_FBE_RELOCATION_LOG
+ 	if (new_main_blkaddr < end_blkaddr) {
+ 		err = f2fs_defragment(sbi, old_main_blkaddr, offset,
+ 						new_main_blkaddr, 0);
+@@ -625,6 +637,9 @@ static int f2fs_resize_grow(struct f2fs_sb_info *sbi)
+ 			offset_seg = offset >> get_sb(log_blocks_per_seg);
+ 		MSG(0, "Try to do defragement: %s\n", err ? "Skip": "Done");
+ 	}
++#else
++	/* C40: full migration gives a complete relocation journal. */
++#endif
+ 	/* move whole data region */
+ 	if (err)
+ 		migrate_main(sbi, offset);
+@@ -636,6 +651,9 @@ static int f2fs_resize_grow(struct f2fs_sb_info *sbi)
+ 	update_superblock(new_sb, SB_MASK_ALL);
+ 	print_raw_sb_info(sb);
+ 	print_raw_sb_info(new_sb);
++#ifdef C40_FBE_RELOCATION_LOG
++	c40_relocation_finish();
++#endif
+ 
+ 	return 0;
+ }

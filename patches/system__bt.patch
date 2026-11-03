@@ -1,0 +1,321 @@
+diff --git a/btif/src/btif_av.cc b/btif/src/btif_av.cc
+index 679ec5e..0cab72a 100644
+--- a/btif/src/btif_av.cc
++++ b/btif/src/btif_av.cc
+@@ -971,9 +971,14 @@ bt_status_t BtifAvSource::Init(
+   osi_property_get("ro.bluetooth.a2dp_offload.supported", value_sup, "false");
+   osi_property_get("persist.bluetooth.a2dp_offload.disabled", value_dis,
+                    "false");
++  char value_phh[PROPERTY_VALUE_MAX] = {'\0'};
++  osi_property_get("persist.sys.phh.disable_a2dp_offload", value_phh, "false");
+   a2dp_offload_enabled_ =
+       (strcmp(value_sup, "true") == 0) && (strcmp(value_dis, "false") == 0);
+-  BTIF_TRACE_DEBUG("a2dp_offload.enable = %d", a2dp_offload_enabled_);
++  if(strcmp(value_phh, "true") == 0)
++      a2dp_offload_enabled_ = false;
++
++  LOG_ERROR(LOG_TAG, "a2dp_offload.enable = %s", a2dp_offload_enabled_ ? "on" : "off");
+ 
+   callbacks_ = callbacks;
+   if (a2dp_offload_enabled_) {
+diff --git a/device/src/esco_parameters.cc b/device/src/esco_parameters.cc
+index cf1fea2..ea28dfa 100644
+--- a/device/src/esco_parameters.cc
++++ b/device/src/esco_parameters.cc
+@@ -21,7 +21,9 @@
+ #include "bt_target.h"
+ #include "device/include/esco_parameters.h"
+ 
+-static const enh_esco_params_t default_esco_parameters[ESCO_NUM_CODECS] = {
++#include <cutils/properties.h>
++
++static enh_esco_params_t default_esco_parameters[ESCO_NUM_CODECS] = {
+     // CVSD
+     {.transmit_bandwidth = TXRX_64KBITS_RATE,
+      .receive_bandwidth = TXRX_64KBITS_RATE,
+@@ -144,5 +146,10 @@ enh_esco_params_t esco_parameters_for_codec(esco_codec_t codec) {
+   CHECK(codec >= 0) << "codec index " << (int)codec << "< 0";
+   CHECK(codec < ESCO_NUM_CODECS) << "codec index " << (int)codec << " > "
+                                  << ESCO_NUM_CODECS;
++  int escoTransportUnitSize = property_get_int32("persist.sys.bt.esco_transport_unit_size", 0);
++  if(escoTransportUnitSize) {
++    default_esco_parameters[codec].input_transport_unit_size = escoTransportUnitSize;
++    default_esco_parameters[codec].output_transport_unit_size = escoTransportUnitSize;
++  }
+   return default_esco_parameters[codec];
+ }
+diff --git a/hci/include/bt_hci_bdroid.h b/hci/include/bt_hci_bdroid.h
+index 110354f..b81185e 100644
+--- a/hci/include/bt_hci_bdroid.h
++++ b/hci/include/bt_hci_bdroid.h
+@@ -32,6 +32,9 @@
+ #ifdef HAS_BDROID_BUILDCFG
+ #include "bdroid_buildcfg.h"
+ #endif
++#ifndef BTM_BYPASS_EXTRA_ACL_SETUP
++#define BTM_BYPASS_EXTRA_ACL_SETUP TRUE
++#endif
+ 
+ /******************************************************************************
+  *  Constants & Macros
+diff --git a/hci/src/hci_packet_parser.cc b/hci/src/hci_packet_parser.cc
+index b1efd44..3bd0efe 100644
+--- a/hci/src/hci_packet_parser.cc
++++ b/hci/src/hci_packet_parser.cc
+@@ -27,6 +27,8 @@
+ #include "hcimsgs.h"
+ #include "osi/include/log.h"
+ 
++#include <cutils/properties.h>
++
+ static const command_opcode_t NO_OPCODE_CHECKING = 0;
+ 
+ static const allocator_t* buffer_allocator;
+@@ -105,9 +107,39 @@ static void parse_read_local_supported_commands_response(
+   STREAM_TO_ARRAY(supported_commands_ptr, stream,
+                   (int)supported_commands_length);
+ 
++  bool disable_eSCO = property_get_bool("persist.sys.bt.disable_esco", false);
++  if(disable_eSCO) {
++    supported_commands_ptr[29] &= ~0x08;
++  }
++
+   buffer_allocator->free(response);
+ }
+ 
++static void setup_bitmask(uint8_t *v, const char* property) {
++  char str[PROPERTY_VALUE_MAX];
++  int len = property_get(property, str, "");
++  memset(v, 255, 8);
++  for(int i = 0; i<len; i++) {
++    if(str[i] == '1') {
++      v[i/8] &= ~(1 << (i%8));
++    } else if(str[i] != '0') {
++      LOG_ERROR(LOG_TAG, "invalid characters in bitmask; skipping %c", str[i]);
++    }
++  }
++}
++
++static void filter_supported_feature(uint8_t *v) {
++  static int setup = 0;
++  static uint8_t unsupport_bitmask[8];
++  if(!setup) {
++    setup = 1;
++    setup_bitmask(unsupport_bitmask, "persist.sys.bt.unsupport.features");
++  }
++
++  for(unsigned i=0; i<sizeof(bt_device_features_t); i++)
++    v[i] &= unsupport_bitmask[i];
++}
++
+ static void parse_read_local_extended_features_response(
+     BT_HDR* response, uint8_t* page_number_ptr, uint8_t* max_page_number_ptr,
+     bt_device_features_t* feature_pages, size_t feature_pages_count) {
+@@ -123,6 +155,16 @@ static void parse_read_local_extended_features_response(
+   STREAM_TO_ARRAY(feature_pages[*page_number_ptr].as_array, stream,
+                   (int)sizeof(bt_device_features_t));
+ 
++  for (int i = 0; i < ((int)sizeof(bt_device_features_t)); i++)
++    LOG_DEBUG(LOG_TAG, "supported feature 0x%x is 0x%x", i, feature_pages[*page_number_ptr].as_array[i]);
++
++  filter_supported_feature(feature_pages[*page_number_ptr].as_array);
++
++  for (int i = 0; i < ((int)sizeof(bt_device_features_t)); i++)
++    LOG_DEBUG(LOG_TAG, "post-filtering supported feature 0x%x is 0x%x", i, feature_pages[*page_number_ptr].as_array[i]);
++
++  LOG_DEBUG(LOG_TAG, "supported_features array done");
++
+   buffer_allocator->free(response);
+ }
+ 
+@@ -148,6 +190,19 @@ static void parse_ble_read_buffer_size_response(BT_HDR* response,
+   buffer_allocator->free(response);
+ }
+ 
++
++static void filter_supported_states(uint8_t *v, int size) {
++  static int setup = 0;
++  static uint8_t unsupport_bitmask[8];
++  if(!setup) {
++    setup = 1;
++    setup_bitmask(unsupport_bitmask, "persist.sys.bt.unsupport.states");
++  }
++
++  for(int i=0; i<size && i<8; i++)
++    v[i] &= unsupport_bitmask[i];
++}
++
+ static void parse_ble_read_supported_states_response(
+     BT_HDR* response, uint8_t* supported_states, size_t supported_states_size) {
+   uint8_t* stream =
+@@ -156,9 +211,30 @@ static void parse_ble_read_supported_states_response(
+   CHECK(stream != NULL);
+   STREAM_TO_ARRAY(supported_states, stream, (int)supported_states_size);
+ 
++  for (int i = 0; i < ((int)supported_states_size); i++)
++    LOG_DEBUG(LOG_TAG, "supported state 0x%x is 0x%x", i, supported_states[i]);
++
++  filter_supported_states(supported_states, supported_states_size);
++
++  for (int i = 0; i < ((int)supported_states_size); i++)
++    LOG_DEBUG(LOG_TAG, "supported.2 state 0x%x is 0x%x", i, supported_states[i]);
++
++  LOG_DEBUG(LOG_TAG, "supported_states array done");
+   buffer_allocator->free(response);
+ }
+ 
++static void filter_supported_stdfeatures(uint8_t *v) {
++  static int setup = 0;
++  static uint8_t unsupport_bitmask[8];
++  if(!setup) {
++    setup = 1;
++    setup_bitmask(unsupport_bitmask, "persist.sys.bt.unsupport.stdfeatures");
++  }
++
++  for(unsigned i=0; i<sizeof(bt_device_features_t); i++)
++    v[i] &= unsupport_bitmask[i];
++}
++
+ static void parse_ble_read_local_supported_features_response(
+     BT_HDR* response, bt_device_features_t* supported_features) {
+   uint8_t* stream = read_command_complete_header(
+@@ -168,6 +244,12 @@ static void parse_ble_read_local_supported_features_response(
+   STREAM_TO_ARRAY(supported_features->as_array, stream,
+                   (int)sizeof(bt_device_features_t));
+ 
++  for (int i = 0; i < ((int)sizeof(bt_device_features_t)); i++)
++    LOG_DEBUG(LOG_TAG, "supported state 0x%x is 0x%x", i, supported_features->as_array[i]);
++  filter_supported_stdfeatures(supported_features->as_array);
++  for (int i = 0; i < ((int)sizeof(bt_device_features_t)); i++)
++    LOG_DEBUG(LOG_TAG, "supported.2 state 0x%x is 0x%x", i, supported_features->as_array[i]);
++
+   buffer_allocator->free(response);
+ }
+ 
+diff --git a/internal_include/bt_target.h b/internal_include/bt_target.h
+index 63b00b0..004c0cc 100644
+--- a/internal_include/bt_target.h
++++ b/internal_include/bt_target.h
+@@ -32,6 +32,9 @@
+ #ifdef HAS_BDROID_BUILDCFG
+ #include "bdroid_buildcfg.h"
+ #endif
++#ifndef BTM_BYPASS_EXTRA_ACL_SETUP
++#define BTM_BYPASS_EXTRA_ACL_SETUP TRUE
++#endif
+ 
+ #include "bt_types.h" /* This must be defined AFTER buildcfg.h */
+ 
+diff --git a/stack/a2dp/a2dp_codec_config.cc b/stack/a2dp/a2dp_codec_config.cc
+index 5f4371f..b9d91f3 100644
+--- a/stack/a2dp/a2dp_codec_config.cc
++++ b/stack/a2dp/a2dp_codec_config.cc
+@@ -573,13 +573,18 @@ bool A2dpCodecs::init() {
+   char* tok = NULL;
+   char* tmp_token = NULL;
+   bool offload_codec_support[BTAV_A2DP_CODEC_INDEX_MAX] = {false};
+-  char value_sup[PROPERTY_VALUE_MAX], value_dis[PROPERTY_VALUE_MAX];
++  char value_sup[PROPERTY_VALUE_MAX], value_dis[PROPERTY_VALUE_MAX], value_phh[PROPERTY_VALUE_MAX];
+ 
+   osi_property_get("ro.bluetooth.a2dp_offload.supported", value_sup, "false");
+   osi_property_get("persist.bluetooth.a2dp_offload.disabled", value_dis,
+                    "false");
++  osi_property_get("persist.sys.phh.disable_a2dp_offload", value_phh, "false");
+   a2dp_offload_status =
+       (strcmp(value_sup, "true") == 0) && (strcmp(value_dis, "false") == 0);
++  if(strcmp(value_phh, "true") == 0)
++      a2dp_offload_status = false;
++
++  LOG_ERROR(LOG_TAG, "Got a2dp offload status %s", a2dp_offload_status ? "on" : "off");
+ 
+   if (a2dp_offload_status) {
+     char value_cap[PROPERTY_VALUE_MAX];
+@@ -667,7 +672,7 @@ bool A2dpCodecs::init() {
+     }
+   }
+ 
+-  return (!ordered_source_codecs_.empty() && !ordered_sink_codecs_.empty());
++  return (!ordered_source_codecs_.empty() && !ordered_sink_codecs_.empty()) && !a2dp_offload_status;
+ }
+ 
+ A2dpCodecConfig* A2dpCodecs::findSourceCodecConfig(
+diff --git a/stack/btm/btm_acl.cc b/stack/btm/btm_acl.cc
+index 6d315bc..10841ac 100644
+--- a/stack/btm/btm_acl.cc
++++ b/stack/btm/btm_acl.cc
+@@ -1219,27 +1219,27 @@ void btm_read_remote_ext_features_failed(uint8_t status, uint16_t handle) {
+ void btm_establish_continue(tACL_CONN* p_acl_cb) {
+   tBTM_BL_EVENT_DATA evt_data;
+   BTM_TRACE_DEBUG("btm_establish_continue");
+-#if (BTM_BYPASS_EXTRA_ACL_SETUP == FALSE)
+-  if (p_acl_cb->transport == BT_TRANSPORT_BR_EDR) {
+-    /* For now there are a some devices that do not like sending */
+-    /* commands events and data at the same time. */
+-    /* Set the packet types to the default allowed by the device */
+-    btm_set_packet_types(p_acl_cb, btm_cb.btm_acl_pkt_types_supported);
+-
+-    if (btm_cb.btm_def_link_policy)
+-      BTM_SetLinkPolicy(p_acl_cb->remote_addr, &btm_cb.btm_def_link_policy);
+-  } else if (p_acl_cb->transport == BT_TRANSPORT_LE) {
+-    tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(p_acl_cb->remote_addr);
+-    if (p_dev_rec == nullptr) {
+-      LOG_WARN(LOG_TAG, "No security record for %s",
+-               PRIVATE_ADDRESS(p_acl_cb->remote_addr));
+-    } else if (p_dev_rec->sec_flags & BTM_SEC_LE_LINK_KEY_KNOWN) {
+-      btm_ble_set_encryption(
+-          p_acl_cb->remote_addr, BTM_BLE_SEC_ENCRYPT,
+-          p_dev_rec->role_master ? BTM_ROLE_MASTER : BTM_ROLE_SLAVE);
++  if (!BTM_BYPASS_EXTRA_ACL_SETUP) {
++    if (p_acl_cb->transport == BT_TRANSPORT_BR_EDR) {
++      /* For now there are a some devices that do not like sending */
++      /* commands events and data at the same time. */
++      /* Set the packet types to the default allowed by the device */
++      btm_set_packet_types(p_acl_cb, btm_cb.btm_acl_pkt_types_supported);
++
++      if (btm_cb.btm_def_link_policy)
++        BTM_SetLinkPolicy(p_acl_cb->remote_addr, &btm_cb.btm_def_link_policy);
++    } else if (p_acl_cb->transport == BT_TRANSPORT_LE) {
++      tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(p_acl_cb->remote_addr);
++      if (p_dev_rec == nullptr) {
++        LOG_WARN(LOG_TAG, "No security record for %s",
++                 PRIVATE_ADDRESS(p_acl_cb->remote_addr));
++      } else if (p_dev_rec->sec_flags & BTM_SEC_LE_LINK_KEY_KNOWN) {
++        btm_ble_set_encryption(
++            p_acl_cb->remote_addr, BTM_BLE_SEC_ENCRYPT,
++            p_dev_rec->role_master ? BTM_ROLE_MASTER : BTM_ROLE_SLAVE);
++      }
+     }
+   }
+-#endif
+   if (p_acl_cb->link_up_issued) {
+     BTM_TRACE_ERROR("%s: Already link is up ", __func__);
+     return;
+diff --git a/stack/btm/btm_sec.cc b/stack/btm/btm_sec.cc
+index aa067ef..2af4be8 100644
+--- a/stack/btm/btm_sec.cc
++++ b/stack/btm/btm_sec.cc
+@@ -4272,15 +4272,15 @@ void btm_sec_connected(const RawAddress& bda, uint16_t handle, uint8_t status,
+   if (p_acl_cb) {
+ /* whatever is in btm_establish_continue() without reporting the BTM_BL_CONN_EVT
+  * event */
+-#if (BTM_BYPASS_EXTRA_ACL_SETUP == FALSE)
+-    /* For now there are a some devices that do not like sending */
+-    /* commands events and data at the same time. */
+-    /* Set the packet types to the default allowed by the device */
+-    btm_set_packet_types(p_acl_cb, btm_cb.btm_acl_pkt_types_supported);
+-
+-    if (btm_cb.btm_def_link_policy)
+-      BTM_SetLinkPolicy(p_acl_cb->remote_addr, &btm_cb.btm_def_link_policy);
+-#endif
++    if(!BTM_BYPASS_EXTRA_ACL_SETUP) {
++      /* For now there are a some devices that do not like sending */
++      /* commands events and data at the same time. */
++      /* Set the packet types to the default allowed by the device */
++      btm_set_packet_types(p_acl_cb, btm_cb.btm_acl_pkt_types_supported);
++
++      if (btm_cb.btm_def_link_policy)
++        BTM_SetLinkPolicy(p_acl_cb->remote_addr, &btm_cb.btm_def_link_policy);
++    }
+   }
+   btm_acl_created(bda, p_dev_rec->dev_class, p_dev_rec->sec_bd_name, handle,
+                   HCI_ROLE_SLAVE, BT_TRANSPORT_BR_EDR);

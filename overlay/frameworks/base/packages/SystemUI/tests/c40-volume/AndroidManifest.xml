@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.c40.systemui.volume.tests">
+    <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="30" />
+    <application android:debuggable="true" android:label="C40 volume regression tests">
+        <uses-library android:name="android.test.runner" />
+    </application>
+    <instrumentation android:name="androidx.test.runner.AndroidJUnitRunner"
+        android:targetPackage="org.c40.systemui.volume.tests" />
+</manifest>

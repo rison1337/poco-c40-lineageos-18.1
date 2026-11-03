@@ -1,0 +1,19 @@
+diff --git a/app/src/main/java/org/lineageos/jelly/MainActivity.kt b/app/src/main/java/org/lineageos/jelly/MainActivity.kt
+index 2902b0a..9ff74ed 100644
+--- a/app/src/main/java/org/lineageos/jelly/MainActivity.kt
++++ b/app/src/main/java/org/lineageos/jelly/MainActivity.kt
+@@ -193,6 +193,7 @@ class MainActivity : WebViewExtActivity(), SearchBarController.OnCancelListener,
+                 findViewById(R.id.search_menu_cancel),
+                 this)
+         setUiMode()
++        applyThemeColor(mThemeColor)
+         try {
+             val httpCacheDir = File(cacheDir, "suggestion_responses")
+             val httpCacheSize = 1024 * 1024.toLong() // 1 MiB
+@@ -763,4 +764,4 @@ class MainActivity : WebViewExtActivity(), SearchBarController.OnCancelListener,
+         private const val STORAGE_PERM_REQ = 423
+         private const val LOCATION_PERM_REQ = 424
+     }
+-}
+\ No newline at end of file
++}

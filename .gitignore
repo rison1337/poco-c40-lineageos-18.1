@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+/private/
+keys/
+*.pk8
+*.key
+source-prebuilts/
+install-report-*.json
+*.img
+*.zip

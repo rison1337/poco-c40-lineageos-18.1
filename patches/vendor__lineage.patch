@@ -1,0 +1,46 @@
+diff --git a/build/soong/Android.bp b/build/soong/Android.bp
+index dc07f49..2617610 100644
+--- a/build/soong/Android.bp
++++ b/build/soong/Android.bp
+@@ -20,9 +20,6 @@ bootstrap_go_package {
+ lineage_generator {
+     name: "generated_kernel_includes",
+ 
+-    // The headers make command
+-    cmd: "$(PATH_OVERRIDE_SOONG) $(KERNEL_MAKE_CMD) $(KERNEL_MAKE_FLAGS) -C $(TARGET_KERNEL_SOURCE) O=$(KERNEL_BUILD_OUT_PREFIX)$(genDir) ARCH=$(KERNEL_ARCH) $(KERNEL_CROSS_COMPILE) headers_install",
+-
+     // Directories that can be imported by a cc_* module generated_headers property
+     export_include_dirs: [
+         "usr/audio/include/uapi",
+@@ -31,15 +28,6 @@ lineage_generator {
+         "usr/include/audio/include/uapi",
+         "usr/techpack/audio/include",
+     ],
+-
+-    // Sources for dependency tracking
+-    dep_root: "$(TARGET_KERNEL_SOURCE)",
+-    dep_files: [
+-        "Makefile",
+-        "include/**/*",
+-        "arch/$(KERNEL_ARCH)/include/**/*",
+-        "techpack/audio/include/**/*",
+-    ],
+ }
+ 
+ cc_library_headers {
+diff --git a/config/common.mk b/config/common.mk
+index 6e7a8c6..f49f749 100644
+--- a/config/common.mk
++++ b/config/common.mk
+@@ -74,9 +74,9 @@ PRODUCT_COPY_FILES += \
+ PRODUCT_COPY_FILES += \
+     vendor/lineage/config/permissions/org.lineageos.android.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/org.lineageos.android.xml
+ 
+-# Enforce privapp-permissions whitelist
++# Log privapp-permissions whitelist violations
+ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+-    ro.control_privapp_permissions=enforce
++    ro.control_privapp_permissions=log
+ 
+ # Include AOSP audio files
+ include vendor/lineage/config/aosp_audio.mk

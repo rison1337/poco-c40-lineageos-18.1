@@ -1,0 +1,4 @@
+# Canonical paths read through /sys/class/wakeup symlinks on frost.
+# Existing system_suspend rules already allow sysfs_wakeup; no new allow rule.
+genfscon sysfs /devices/platform/0.soc/0.soc:ant_check/wakeup u:object_r:sysfs_wakeup:s0
+genfscon sysfs /devices/platform/0.soc/0.soc:ant_check_div/wakeup u:object_r:sysfs_wakeup:s0

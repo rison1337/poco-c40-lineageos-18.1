@@ -1,0 +1,144 @@
+diff --git a/src/com/android/camera/one/config/OneCameraFeatureConfigCreator.java b/src/com/android/camera/one/config/OneCameraFeatureConfigCreator.java
+index dc7f900..8e59ac8 100644
+--- a/src/com/android/camera/one/config/OneCameraFeatureConfigCreator.java
++++ b/src/com/android/camera/one/config/OneCameraFeatureConfigCreator.java
+@@ -18,6 +18,7 @@ package com.android.camera.one.config;
+ 
+ import android.content.ContentResolver;
+ import android.hardware.camera2.CameraCharacteristics;
++import android.os.SystemProperties;
+ 
+ import com.android.camera.app.MemoryManager;
+ import com.android.camera.debug.Log;
+@@ -85,6 +86,15 @@ public class OneCameraFeatureConfigCreator {
+                     return CaptureSupportLevel.LEGACY_JPEG;
+                 }
+ 
++                // The frost vendor HAL cannot select an HDR feature graph for
++                // the continuous full-resolution YUV stream used by software
++                // ZSL. Its native JPEG still path supports vendor scene modes
++                // and the full advertised still resolution without that ring
++                // buffer or a software JPEG conversion.
++                if ("frost".equals(SystemProperties.get("ro.product.vendor.device"))) {
++                    return CaptureSupportLevel.LIMITED_JPEG;
++                }
++
+                 // No matter if L or L MR1, the N5 does not currently support
+                 // ZSL due to HAL bugs. The latest one causes random preview
+                 // freezes even on MR1, see b/19565931.
+diff --git a/src/com/android/camera/one/v2/OneCameraCharacteristicsImpl.java b/src/com/android/camera/one/v2/OneCameraCharacteristicsImpl.java
+index 77e9a81..17395c7 100644
+--- a/src/com/android/camera/one/v2/OneCameraCharacteristicsImpl.java
++++ b/src/com/android/camera/one/v2/OneCameraCharacteristicsImpl.java
+@@ -72,6 +72,17 @@ public class OneCameraCharacteristicsImpl implements OneCameraCharacteristics {
+         for (android.util.Size androidSize : configMap.getOutputSizes(imageFormat)) {
+             supportedPictureSizes.add(new Size(androidSize));
+         }
++        // Still capture may use slower high-resolution outputs too. The
++        // normal list omits frost's 13 MP modes because they run below 20 fps.
++        android.util.Size[] highResolutionSizes = configMap.getHighResolutionOutputSizes(imageFormat);
++        if (highResolutionSizes != null) {
++            for (android.util.Size androidSize : highResolutionSizes) {
++                Size size = new Size(androidSize);
++                if (!supportedPictureSizes.contains(size)) {
++                    supportedPictureSizes.add(size);
++                }
++            }
++        }
+         return supportedPictureSizes;
+     }
+ 
+diff --git a/src/com/android/camera/one/v2/common/BasicCameraFactory.java b/src/com/android/camera/one/v2/common/BasicCameraFactory.java
+index 44883ea..93281bc 100644
+--- a/src/com/android/camera/one/v2/common/BasicCameraFactory.java
++++ b/src/com/android/camera/one/v2/common/BasicCameraFactory.java
+@@ -21,6 +21,7 @@ import android.graphics.Rect;
+ import android.hardware.camera2.CaptureRequest;
+ import android.hardware.camera2.params.MeteringRectangle;
+ import android.os.Build.VERSION_CODES;
++import android.os.SystemProperties;
+ 
+ import com.android.camera.async.Lifetime;
+ import com.android.camera.async.Observable;
+@@ -110,6 +111,18 @@ public class BasicCameraFactory {
+                     hdrSceneSetting,
+                     faceDetectMode,
+                     cameraCharacteristics.getSupportedHardwareLevel()));
++        if ("frost".equals(SystemProperties.get("ro.product.vendor.device"))) {
++            // The stock CHI HDR feature reads Xiaomi's enable tag as well as
++            // the standard scene mode. Without it, the multi-frame graph waits
++            // for a different exposure sequence and never returns the JPEG.
++            requestTemplate.setParam(new CaptureRequest.Key<Byte>("xiaomi.hdr.enabled", Byte.class),
++                    new Supplier<Byte>() {
++                        @Override
++                        public Byte get() {
++                            return (byte) (hdrSceneSetting.get() ? 1 : 0);
++                        }
++                    });
++        }
+         requestTemplate.setParam(CaptureRequest.STATISTICS_FACE_DETECT_MODE,
+               new StatisticsFaceDetectMode(faceDetectMode));
+ 
+diff --git a/src/com/android/camera/one/v2/common/ControlModeSelector.java b/src/com/android/camera/one/v2/common/ControlModeSelector.java
+index 5e3f40f..42be8de 100644
+--- a/src/com/android/camera/one/v2/common/ControlModeSelector.java
++++ b/src/com/android/camera/one/v2/common/ControlModeSelector.java
+@@ -28,7 +28,6 @@ import com.google.common.base.Supplier;
+ public class ControlModeSelector implements Supplier<Integer> {
+     private final Supplier<Boolean> mHdrSetting;
+     private final Supplier<FaceDetectMode> mFaceDetectMode;
+-    private final SupportedHardwareLevel mSupportedHardwareLevel;
+ 
+     public ControlModeSelector(
+           Supplier<Boolean> hdrSetting,
+@@ -36,15 +35,14 @@ public class ControlModeSelector implements Supplier<Integer> {
+           SupportedHardwareLevel supportedHardwareLevel) {
+         mHdrSetting = hdrSetting;
+         mFaceDetectMode = faceDetectMode;
+-        mSupportedHardwareLevel = supportedHardwareLevel;
+     }
+ 
+     @Override
+     public Integer get() {
+-        if (mSupportedHardwareLevel == SupportedHardwareLevel.LEGACY) {
+-            if (mHdrSetting.get()) {
+-                return CaptureRequest.CONTROL_MODE_USE_SCENE_MODE;
+-            }
++        // HDR support is checked before the setting is supplied. Do not
++        // discard an advertised vendor scene mode on non-LEGACY cameras.
++        if (mHdrSetting.get()) {
++            return CaptureRequest.CONTROL_MODE_USE_SCENE_MODE;
+         }
+ 
+         if (mFaceDetectMode.get() == FaceDetectMode.FULL ||
+diff --git a/src/com/android/camera/one/v2/common/ControlSceneModeSelector.java b/src/com/android/camera/one/v2/common/ControlSceneModeSelector.java
+index 3b3b1e6..e869d58 100644
+--- a/src/com/android/camera/one/v2/common/ControlSceneModeSelector.java
++++ b/src/com/android/camera/one/v2/common/ControlSceneModeSelector.java
+@@ -35,22 +35,20 @@ public class ControlSceneModeSelector implements Supplier<Integer> {
+ 
+     private final Supplier<Boolean> mHdrSetting;
+     private final Supplier<FaceDetectMode> mFaceDetectMode;
+-    private final SupportedHardwareLevel mSupportedHardwareLevel;
+ 
+     public ControlSceneModeSelector(Supplier<Boolean> hdrSetting,
+           Supplier<FaceDetectMode> faceDetectMode,
+           SupportedHardwareLevel supportedHardwareLevel) {
+         mHdrSetting = hdrSetting;
+         mFaceDetectMode = faceDetectMode;
+-        mSupportedHardwareLevel = supportedHardwareLevel;
+     }
+ 
+     @Override
+     public Integer get() {
+-        if (mSupportedHardwareLevel == SupportedHardwareLevel.LEGACY) {
+-            if (mHdrSetting.get()) {
+-                return CONTROL_SCENE_MODE_HDR;
+-            }
++        // OneCameraCaptureSetting only enables this setting when the camera
++        // advertises HDR. HAL3 cameras can support the vendor scene mode too.
++        if (mHdrSetting.get()) {
++            return CONTROL_SCENE_MODE_HDR;
+         }
+ 
+         if (mFaceDetectMode.get() == FaceDetectMode.FULL ||

@@ -1,0 +1,85 @@
+diff --git a/resources/src/main/java/org/robolectric/res/android/LoadedArsc.java b/resources/src/main/java/org/robolectric/res/android/LoadedArsc.java
+index 9767b9a..f9749c1 100644
+--- a/resources/src/main/java/org/robolectric/res/android/LoadedArsc.java
++++ b/resources/src/main/java/org/robolectric/res/android/LoadedArsc.java
+@@ -711,22 +711,20 @@ public class LoadedArsc {
+               return emptyBraces();
+             }
+ 
+-            if (child_chunk.data_size() / ResTable_lib_entry.SIZEOF < dtohl(lib.count)) {
++            final int entryCount = dtohl(lib.count);
++            if (entryCount < 0 || child_chunk.data_size() / ResTable_lib_entry.SIZEOF < entryCount) {
+               logError("RES_TABLE_LIBRARY_TYPE too small to hold entries.");
+               return emptyBraces();
+             }
+ 
+-            // loaded_package.dynamic_package_map_.reserve(dtohl(lib.count));
+-
+-            // ResTable_lib_entry entry_begin =
+-            //     reinterpret_cast<ResTable_lib_entry*>(child_chunk.data_ptr());
+-            ResTable_lib_entry entry_begin =
+-                child_chunk.asResTable_lib_entry();
+-            // ResTable_lib_entry entry_end = entry_begin + dtohl(lib.count);
+-            // for (auto entry_iter = entry_begin; entry_iter != entry_end; ++entry_iter) {
+-            for (ResTable_lib_entry entry_iter = entry_begin;
+-                entry_iter.myOffset() != entry_begin.myOffset() + dtohl(lib.count);
+-                entry_iter = new ResTable_lib_entry(entry_iter.myBuf(), entry_iter.myOffset() + ResTable_lib_entry.SIZEOF)) {
++            // Entries are in the chunk payload, not its 12-byte header.
++            // Native pointer arithmetic advances by sizeof(entry); the Java
++            // translation must count entries rather than compare byte offsets
++            // against an unscaled count. Lineage's shared resource APK uses it.
++            final ResourceTypes.WithOffset entries = child_chunk.data_ptr();
++            for (int entryIndex = 0; entryIndex < entryCount; entryIndex++) {
++              final ResTable_lib_entry entry_iter = new ResTable_lib_entry(
++                  entries.myBuf(), entries.myOffset() + entryIndex * ResTable_lib_entry.SIZEOF);
+               String package_name =
+                   Util.ReadUtf16StringFromDevice(entry_iter.packageName,
+                       entry_iter.packageName.length);
+diff --git a/shadows/framework/src/main/java/org/robolectric/shadows/ShadowPackageParser.java b/shadows/framework/src/main/java/org/robolectric/shadows/ShadowPackageParser.java
+index 8c2f6e1..794ea93 100644
+--- a/shadows/framework/src/main/java/org/robolectric/shadows/ShadowPackageParser.java
++++ b/shadows/framework/src/main/java/org/robolectric/shadows/ShadowPackageParser.java
+@@ -7,6 +7,7 @@ import android.content.pm.PackageParser.Package;
+ import android.os.Build;
+ import android.util.DisplayMetrics;
+ import java.io.File;
++import java.lang.reflect.Proxy;
+ import java.util.List;
+ import org.robolectric.RuntimeEnvironment;
+ import org.robolectric.annotation.Implementation;
+@@ -24,7 +25,22 @@ public class ShadowPackageParser {
+   @Implementation
+   protected void __constructor__() {
+     if (RuntimeEnvironment.getApiLevel() >= Build.VERSION_CODES.O) {
+-      realObject.setCallback(new Callback());
++      // GSI adds an optional app-profile service callback. A proxy preserves
++      // the no-feature/no-service fixture on both stock SDK jars and that
++      // extended interface without referencing a GSI-only class on old SDKs.
++      realObject.setCallback((PackageParser.Callback) Proxy.newProxyInstance(
++          PackageParser.Callback.class.getClassLoader(),
++          new Class<?>[] {PackageParser.Callback.class},
++          (proxy, method, args) -> {
++            switch (method.getName()) {
++              case "hasFeature": return false;
++              case "getAppProfileService": return null;
++              case "toString": return "RobolectricPackageParserCallback";
++              case "hashCode": return System.identityHashCode(proxy);
++              case "equals": return proxy == args[0];
++              default: throw new UnsupportedOperationException(method.getName());
++            }
++          }));
+     }
+   }
+ 
+@@ -66,11 +82,4 @@ public class ShadowPackageParser {
+     }
+   }
+ 
+-  private static class Callback implements PackageParser.Callback {
+-
+-    @Override
+-    public boolean hasFeature(String feature) {
+-      return false;
+-    }
+-  }
+ }

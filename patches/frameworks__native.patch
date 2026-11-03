@@ -1,0 +1,586 @@
+diff --git a/cmds/atrace/atrace.cpp b/cmds/atrace/atrace.cpp
+index 28fdaa4..36a35f9 100644
+--- a/cmds/atrace/atrace.cpp
++++ b/cmds/atrace/atrace.cpp
+@@ -171,7 +171,6 @@ static const TracingCategory k_categories[] = {
+         { OPT,      "events/clk/clk_disable/enable" },
+         { OPT,      "events/clk/clk_enable/enable" },
+         { OPT,      "events/power/cpu_frequency_limits/enable" },
+-        { OPT,      "events/power/suspend_resume/enable" },
+     } },
+     { "membus",     "Memory Bus Utilization", 0, {
+         { REQ,      "events/memory_bus/enable" },
+diff --git a/cmds/atrace/atrace.rc b/cmds/atrace/atrace.rc
+index f442dae..3fb5827 100644
+--- a/cmds/atrace/atrace.rc
++++ b/cmds/atrace/atrace.rc
+@@ -49,8 +49,6 @@ on late-init
+     chmod 0666 /sys/kernel/tracing/events/power/cpu_frequency_limits/enable
+     chmod 0666 /sys/kernel/debug/tracing/events/power/gpu_frequency/enable
+     chmod 0666 /sys/kernel/tracing/events/power/gpu_frequency/enable
+-    chmod 0666 /sys/kernel/debug/tracing/events/power/suspend_resume/enable
+-    chmod 0666 /sys/kernel/tracing/events/power/suspend_resume/enable
+     chmod 0666 /sys/kernel/debug/tracing/events/cpufreq_interactive/enable
+     chmod 0666 /sys/kernel/tracing/events/cpufreq_interactive/enable
+     chmod 0666 /sys/kernel/debug/tracing/events/vmscan/mm_vmscan_direct_reclaim_begin/enable
+diff --git a/cmds/installd/migrate_legacy_obb_data.sh b/cmds/installd/migrate_legacy_obb_data.sh
+index 7399681..9d5b73e 100644
+--- a/cmds/installd/migrate_legacy_obb_data.sh
++++ b/cmds/installd/migrate_legacy_obb_data.sh
+@@ -18,7 +18,7 @@
+ rm -rf /data/media/0/Android/obb/test_probe
+ mkdir -p /data/media/0/Android/obb/
+ touch /data/media/0/Android/obb/test_probe
+-if ! test -f /data/media/0/Android/obb/test_probe ; then
++if ! test -f /data/media/0/Android/obb/test_probe  || [ "$(adb shell getprop ro.vndk.version)" -le 28 ]; then
+   log -p i -t migrate_legacy_obb_data "No support for 'unshared_obb'. Not migrating"
+   rm -rf /data/media/0/Android/obb/test_probe
+   exit 0
+diff --git a/libs/sensor/Sensor.cpp b/libs/sensor/Sensor.cpp
+index d71f271..6bcc3dc 100644
+--- a/libs/sensor/Sensor.cpp
++++ b/libs/sensor/Sensor.cpp
+@@ -405,6 +405,7 @@ const String8& Sensor::getStringType() const {
+ }
+ 
+ const String8& Sensor::getRequiredPermission() const {
++    if (mRequiredPermission == "com.samsung.permission.SSENSOR") return mFakeRequiredPermission;
+     return mRequiredPermission;
+ }
+ 
+diff --git a/libs/sensor/include/sensor/Sensor.h b/libs/sensor/include/sensor/Sensor.h
+index 324d443..2d44467 100644
+--- a/libs/sensor/include/sensor/Sensor.h
++++ b/libs/sensor/include/sensor/Sensor.h
+@@ -125,6 +125,7 @@ private:
+     uint32_t mFifoMaxEventCount;
+     String8 mStringType;
+     String8 mRequiredPermission;
++    String8 mFakeRequiredPermission;
+     bool mRequiredPermissionRuntime = false;
+     int32_t mRequiredAppOp;
+     int32_t mMaxDelay;
+diff --git a/libs/ui/Gralloc2.cpp b/libs/ui/Gralloc2.cpp
+index 224caf7..042d58d 100644
+--- a/libs/ui/Gralloc2.cpp
++++ b/libs/ui/Gralloc2.cpp
+@@ -115,7 +115,7 @@ status_t Gralloc2Mapper::validateBufferDescriptorInfo(
+     if (descriptorInfo->usage & ~validUsageBits) {
+         ALOGE("buffer descriptor contains invalid usage bits 0x%" PRIx64,
+               descriptorInfo->usage & ~validUsageBits);
+-        return BAD_VALUE;
++        //return BAD_VALUE;
+     }
+     return NO_ERROR;
+ }
+diff --git a/opengl/libs/EGL/egl_platform_entries.cpp b/opengl/libs/EGL/egl_platform_entries.cpp
+index b68a7cd..05c6268 100644
+--- a/opengl/libs/EGL/egl_platform_entries.cpp
++++ b/opengl/libs/EGL/egl_platform_entries.cpp
+@@ -454,8 +454,14 @@ EGLBoolean eglGetConfigAttribImpl(EGLDisplay dpy, EGLConfig config,
+ // ----------------------------------------------------------------------------
+ 
+ // Translates EGL color spaces to Android data spaces.
++static int samsungColorspace = -1;
+ static android_dataspace dataSpaceFromEGLColorSpace(EGLint colorspace) {
++    if(samsungColorspace == -1) {
++        samsungColorspace = base::GetBoolProperty("persist.sys.phh.samsung_colorspace", false);
++    }
+     if (colorspace == EGL_GL_COLORSPACE_LINEAR_KHR) {
++        if(samsungColorspace)
++            return HAL_DATASPACE_UNKNOWN;
+         return HAL_DATASPACE_UNKNOWN;
+     } else if (colorspace == EGL_GL_COLORSPACE_SRGB_KHR) {
+         return HAL_DATASPACE_V0_SRGB;
+diff --git a/services/inputflinger/reader/InputDevice.cpp b/services/inputflinger/reader/InputDevice.cpp
+index 3347ba6..67a3c56 100644
+--- a/services/inputflinger/reader/InputDevice.cpp
++++ b/services/inputflinger/reader/InputDevice.cpp
+@@ -279,7 +279,10 @@ void InputDevice::configure(nsecs_t when, const InputReaderConfiguration* config
+             mAssociatedDisplayPort = std::nullopt;
+             mAssociatedViewport = std::nullopt;
+             // Find the display port that corresponds to the current input port.
+-            const std::string& inputPort = mIdentifier.location;
++            std::string inputPort = mIdentifier.location;
++            if (inputPort.empty()) {
++                inputPort = mIdentifier.uniqueId;
++            }
+             if (!inputPort.empty()) {
+                 const std::unordered_map<std::string, uint8_t>& ports = config->portAssociations;
+                 const auto& displayPort = ports.find(inputPort);
+diff --git a/services/inputflinger/reader/mapper/JoystickInputMapper.cpp b/services/inputflinger/reader/mapper/JoystickInputMapper.cpp
+index 030a846..929bfc5 100644
+--- a/services/inputflinger/reader/mapper/JoystickInputMapper.cpp
++++ b/services/inputflinger/reader/mapper/JoystickInputMapper.cpp
+@@ -196,6 +196,8 @@ void JoystickInputMapper::configure(nsecs_t when, const InputReaderConfiguration
+             }
+         }
+     }
++    std::optional<DisplayViewport> viewport = getDeviceContext().getAssociatedViewport();
++    mDisplayId = viewport ? viewport->displayId : ADISPLAY_ID_NONE;
+ }
+ 
+ bool JoystickInputMapper::haveAxis(int32_t axisId) {
+@@ -334,7 +336,7 @@ void JoystickInputMapper::sync(nsecs_t when, bool force) {
+     uint32_t policyFlags = 0;
+ 
+     NotifyMotionArgs args(getContext()->getNextId(), when, getDeviceId(), AINPUT_SOURCE_JOYSTICK,
+-                          ADISPLAY_ID_NONE, policyFlags, AMOTION_EVENT_ACTION_MOVE, 0, 0, metaState,
++                          mDisplayId, policyFlags, AMOTION_EVENT_ACTION_MOVE, 0, 0, metaState,
+                           buttonState, MotionClassification::NONE, AMOTION_EVENT_EDGE_FLAG_NONE, 1,
+                           &pointerProperties, &pointerCoords, 0, 0,
+                           AMOTION_EVENT_INVALID_CURSOR_POSITION,
+diff --git a/services/inputflinger/reader/mapper/JoystickInputMapper.h b/services/inputflinger/reader/mapper/JoystickInputMapper.h
+index 823a096..cf864ba 100644
+--- a/services/inputflinger/reader/mapper/JoystickInputMapper.h
++++ b/services/inputflinger/reader/mapper/JoystickInputMapper.h
+@@ -105,6 +105,8 @@ private:
+ 
+     static void addMotionRange(int32_t axisId, const Axis& axis, InputDeviceInfo* info);
+     static void setPointerCoordsAxisValue(PointerCoords* pointerCoords, int32_t axis, float value);
++
++    int32_t mDisplayId = ADISPLAY_ID_NONE;
+ };
+ 
+ } // namespace android
+diff --git a/services/inputflinger/tests/InputReader_test.cpp b/services/inputflinger/tests/InputReader_test.cpp
+index c457a15..c9b7049 100644
+--- a/services/inputflinger/tests/InputReader_test.cpp
++++ b/services/inputflinger/tests/InputReader_test.cpp
+@@ -20,6 +20,7 @@
+ #include <InputReader.h>
+ #include <InputReaderBase.h>
+ #include <InputReaderFactory.h>
++#include <JoystickInputMapper.h>
+ #include <KeyboardInputMapper.h>
+ #include <MultiTouchInputMapper.h>
+ #include <SingleTouchInputMapper.h>
+@@ -252,6 +253,10 @@ public:
+         mConfig.portAssociations.insert({inputPort, displayPort});
+     }
+ 
++    void removeInputPortAssociation(const std::string& inputPort) {
++        mConfig.portAssociations.erase(inputPort);
++    }
++
+     void addDisabledDevice(int32_t deviceId) { mConfig.disabledDevices.insert(deviceId); }
+ 
+     void removeDisabledDevice(int32_t deviceId) { mConfig.disabledDevices.erase(deviceId); }
+@@ -7336,4 +7341,99 @@ TEST_F(MultiTouchInputMapperTest_SurfaceRange, Viewports_SurfaceRange_270) {
+     constexpr int32_t yExpected = (x + 1) - DISPLAY_WIDTH / 4;
+     processPositionAndVerify(mapper, x - 1, y, x + 1, y, xExpected, yExpected);
+ }
++class JoystickInputMapperTest : public InputMapperTest {
++    protected:
++    const std::string PRIMARY_UNIQUE_ID = "local:0";
++    const std::string SECONDARY_UNIQUE_ID = "local:1";
++    static const uint8_t HDMI1;
++    static const uint8_t HDMI2;
++    virtual void SetUp() override {
++        InputMapperTest::SetUp(INPUT_DEVICE_CLASS_JOYSTICK);
++    }
++
++    static void process(InputMapper& mapper, nsecs_t when, int32_t type, int32_t code,
++                        int32_t value) {
++        RawEvent event;
++        event.when = when;
++        event.deviceId = mapper.getDeviceContext().getEventHubId();
++        event.type = type;
++        event.code = code;
++        event.value = value;
++        mapper.process(&event);
++    }
++
++    static void process(InputMapper& mapper, int x, int y) {
++        process(mapper, ARBITRARY_TIME, EV_ABS, ABS_X, x);
++        process(mapper, ARBITRARY_TIME, EV_ABS, ABS_Y, y);
++        process(mapper, ARBITRARY_TIME, EV_SYN, SYN_REPORT, 0);
++    }
++};
++
++const uint8_t JoystickInputMapperTest::HDMI1 = 0;
++const uint8_t JoystickInputMapperTest::HDMI2 = 1;
++TEST_F(JoystickInputMapperTest, Configure_AssignsDisplayPort) {
++    NotifyMotionArgs args;
++
++    // Prepare test
++    setDisplayInfoAndReconfigure(DISPLAY_ID, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_ORIENTATION_0,
++                                 PRIMARY_UNIQUE_ID, HDMI1, ViewportType::VIEWPORT_INTERNAL);
++
++    mFakeEventHub->addAbsoluteAxis(EVENTHUB_ID, ABS_X, 0, 255, 15, 0, 0);
++    mFakeEventHub->addAbsoluteAxis(EVENTHUB_ID, ABS_Y, 0, 255, 15, 0, 0);
++
++    JoystickInputMapper& mapper =
++            addMapperAndConfigure<JoystickInputMapper>();
++    // 1. Ensure when initially unmapped, that event goes to focused display
++    // Center joystick
++    process(mapper, 127, 127);
++    ASSERT_NO_FATAL_FAILURE(mFakeListener->assertNotifyMotionWasCalled(&args));
++
++    // Joystick hasn't been mapped to any display yet, so it goes where the focus is
++    ASSERT_EQ(args.displayId, ADISPLAY_ID_NONE);
++    ASSERT_TRUE(mDevice->isEnabled());
++
++    // 2. Ensure that when mapping joystick to non-existing display, device is disabled
++
++    // Assign joystick to a non-existing display
++    mFakePolicy->addInputPortAssociation(DEVICE_LOCATION, HDMI2);
++    configureDevice(InputReaderConfiguration::CHANGE_DISPLAY_INFO);
++
++    // We don't test mapper's return value here, because it may or may not have a notion
++    // of whether the viewport exists
++    ASSERT_FALSE(mDevice->isEnabled());
++
++    // 3. Ensure that when joystick is mapped and screen is attached, events go to correct display
++    // Prepare second display.
++    constexpr int32_t newDisplayId = 37;
++    setDisplayInfoAndReconfigure(newDisplayId, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_ORIENTATION_0,
++                                 SECONDARY_UNIQUE_ID, HDMI2, ViewportType::VIEWPORT_EXTERNAL);
++    configureDevice(InputReaderConfiguration::CHANGE_DISPLAY_INFO);
++
++    // Device should be enabled after the associated display is found.
++    ASSERT_TRUE(mDevice->isEnabled());
++
++    // Send an event and ensure it goes to the correct display
++    process(mapper, 40, 127);
++
++    ASSERT_NO_FATAL_FAILURE(mFakeListener->assertNotifyMotionWasCalled(&args));
++
++    ASSERT_EQ(args.displayId, newDisplayId);
++    ASSERT_EQ(args.pointerCount, 1U);
++
++    // ABS_{X,Y} are mapped to GENERIC_{1,2} because FakeInputReaderContext does no axis mapping
++    ASSERT_NEAR(args.pointerCoords[0].getAxisValue(AMOTION_EVENT_AXIS_GENERIC_1), 0.16, 0.02f);
++    ASSERT_NEAR(args.pointerCoords[0].getAxisValue(AMOTION_EVENT_AXIS_GENERIC_2), 0.5, 0.02f);
++
++    // 4. Ensure that when removing association again, joystick goes back to focus-based display
++    // Remove association
++    mFakePolicy->removeInputPortAssociation(DEVICE_LOCATION);
++    configureDevice(InputReaderConfiguration::CHANGE_DISPLAY_INFO);
++
++    process(mapper, 127, 127);
++
++    ASSERT_NO_FATAL_FAILURE(mFakeListener->assertNotifyMotionWasCalled(&args));
++
++    // And check we're back to focus-based
++    ASSERT_EQ(args.displayId, ADISPLAY_ID_NONE);
++}
+ } // namespace android
+diff --git a/services/sensorservice/SensorDevice.cpp b/services/sensorservice/SensorDevice.cpp
+index e355594..eb5bfe2 100644
+--- a/services/sensorservice/SensorDevice.cpp
++++ b/services/sensorservice/SensorDevice.cpp
+@@ -22,6 +22,7 @@
+ #include "convertV2_1.h"
+ 
+ #include <android-base/logging.h>
++#include <android-base/properties.h>
+ #include <android/util/ProtoOutputStream.h>
+ #include <frameworks/base/core/proto/android/service/sensor_service.proto.h>
+ #include <sensors/convert.h>
+@@ -34,7 +35,9 @@
+ #include <cinttypes>
+ #include <thread>
+ 
++#include <android-base/properties.h>
+ using namespace android::hardware::sensors;
++
+ using namespace android::hardware::sensors::V1_0;
+ using namespace android::hardware::sensors::V1_0::implementation;
+ using android::hardware::sensors::V2_0::EventQueueFlagBits;
+@@ -127,13 +130,19 @@ SensorDevice::SensorDevice()
+ 
+     initializeSensorList();
+ 
+-    mIsDirectReportSupported =
+-            (checkReturnAndGetStatus(mSensors->unregisterDirectChannel(-1)) != INVALID_OPERATION);
++    if(::android::base::GetBoolProperty("persist.sys.phh.disable_sensor_direct_report", false)) {
++        mIsDirectReportSupported = false;
++    } else {
++        mIsDirectReportSupported =
++                (checkReturnAndGetStatus(mSensors->unregisterDirectChannel(-1)) != INVALID_OPERATION);
++    }
+ }
+ 
+ void SensorDevice::initializeSensorList() {
+     float minPowerMa = 0.001; // 1 microAmp
+ 
++    if(::android::base::GetBoolProperty("persist.sys.phh.samsung_sensors", false))
++        setMode(5555);
+     checkReturn(mSensors->getSensorsList(
+             [&](const auto &list) {
+                 const size_t count = list.size();
+diff --git a/services/surfaceflinger/BufferQueueLayer.cpp b/services/surfaceflinger/BufferQueueLayer.cpp
+index 87be9a8..22b564b 100644
+--- a/services/surfaceflinger/BufferQueueLayer.cpp
++++ b/services/surfaceflinger/BufferQueueLayer.cpp
+@@ -24,9 +24,9 @@
+ #include "BufferQueueLayer.h"
+ 
+ #include <compositionengine/LayerFECompositionState.h>
+-#include <compositionengine/FodExtension.h>
+ #include <gui/BufferQueueConsumer.h>
+ #include <system/window.h>
++#include <cutils/properties.h>
+ 
+ #include "LayerRejecter.h"
+ #include "SurfaceInterceptor.h"
+@@ -35,6 +35,14 @@
+ #include "Scheduler/LayerHistory.h"
+ #include "TimeStats/TimeStats.h"
+ 
++static bool sCheckedProps = false;
++static bool sSamsungFod = false;
++static void init_fod_props() {
++    if(sCheckedProps) return;
++    sCheckedProps = true;
++    sSamsungFod = property_get_bool("persist.sys.phh.fod.samsung", false);
++}
++
+ namespace android {
+ 
+ BufferQueueLayer::BufferQueueLayer(const LayerCreationArgs& args) : BufferLayer(args) {}
+@@ -492,6 +500,7 @@ void BufferQueueLayer::onFirstRef() {
+     mConsumer =
+             mFlinger->getFactory().createBufferLayerConsumer(consumer, mFlinger->getRenderEngine(),
+                                                              mTextureName, this);
++    init_fod_props();
+     mConsumer->setConsumerUsageBits(getEffectiveUsage(0));
+ 
+     mContentsChangedListener = new ContentsChangedListener(this);
+@@ -515,16 +524,15 @@ status_t BufferQueueLayer::setDefaultBufferProperties(uint32_t w, uint32_t h, Pi
+         return BAD_VALUE;
+     }
+ 
+-    uint64_t usageBits = getEffectiveUsage(0);
+-
+-    if (mName == FOD_LAYER_NAME) {
+-        usageBits = getFodUsageBits(usageBits, false);
+-    } else if (mName == FOD_TOUCHED_LAYER_NAME) {
+-        usageBits = getFodUsageBits(usageBits, true);
+-    }
++    init_fod_props();
+ 
+     setDefaultBufferSize(w, h);
+     mConsumer->setDefaultBufferFormat(format);
++    uint64_t usageBits = getEffectiveUsage(0);
++    if(sSamsungFod && strstr(mName.c_str(), "Fingerprint on display.touched") != nullptr) {
++        ALOGE("Found on touched layer!");
++        usageBits |= 0x400000000LL;
++    }
+     mConsumer->setConsumerUsageBits(usageBits);
+ 
+     return NO_ERROR;
+diff --git a/services/surfaceflinger/CompositionEngine/Android.bp b/services/surfaceflinger/CompositionEngine/Android.bp
+index d205a19..b3b9fe5 100644
+--- a/services/surfaceflinger/CompositionEngine/Android.bp
++++ b/services/surfaceflinger/CompositionEngine/Android.bp
+@@ -41,10 +41,7 @@ cc_defaults {
+ 
+ cc_library {
+     name: "libcompositionengine",
+-    defaults: [
+-        "libcompositionengine_defaults",
+-        "surfaceflinger_fod_lib_defaults",
+-    ],
++    defaults: ["libcompositionengine_defaults"],
+     srcs: [
+         "src/ClientCompositionRequestCache.cpp",
+         "src/CompositionEngine.cpp",
+@@ -87,14 +84,6 @@ cc_library {
+     export_include_dirs: ["include"],
+ }
+ 
+-cc_library_static {
+-    name: "surfaceflinger_fod_lib",
+-    srcs: [
+-        "src/FodExtension.cpp",
+-    ],
+-    export_include_dirs: ["include"],
+-}
+-
+ cc_test {
+     name: "libcompositionengine_test",
+     test_suites: ["device-tests"],
+diff --git a/services/surfaceflinger/CompositionEngine/include/compositionengine/FodExtension.h b/services/surfaceflinger/CompositionEngine/include/compositionengine/FodExtension.h
+deleted file mode 100644
+index 3585f63..0000000
+--- a/services/surfaceflinger/CompositionEngine/include/compositionengine/FodExtension.h
++++ /dev/null
+@@ -1,28 +0,0 @@
+-/*
+- * Copyright 2020 The LineageOS Project
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *      http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-#include <stdint.h>
+-
+-#ifndef __FOD_EXTENSION__H__
+-#define __FOD_EXTENSION__H__
+-
+-#define FOD_LAYER_NAME "Fingerprint on display#0"
+-#define FOD_TOUCHED_LAYER_NAME "Fingerprint on display.touched#0"
+-
+-extern uint32_t getFodZOrder(uint32_t z, bool touched);
+-extern uint64_t getFodUsageBits(uint64_t usageBits, bool touched);
+-
+-#endif /* __FOD_EXTENSION__H__ */
+diff --git a/services/surfaceflinger/CompositionEngine/src/FodExtension.cpp b/services/surfaceflinger/CompositionEngine/src/FodExtension.cpp
+deleted file mode 100644
+index dff24c2..0000000
+--- a/services/surfaceflinger/CompositionEngine/src/FodExtension.cpp
++++ /dev/null
+@@ -1,27 +0,0 @@
+-/*
+- * Copyright 2020 The LineageOS Project
+- *
+- * Licensed under the Apache License, Version 2.0 (the "License");
+- * you may not use this file except in compliance with the License.
+- * You may obtain a copy of the License at
+- *
+- *      http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-
+-#ifndef TARGET_PROVIDES_FOD_LIB
+-#include <compositionengine/FodExtension.h>
+-
+-uint32_t getFodZOrder(uint32_t z, __unused bool touched) {
+-    return z;
+-}
+-
+-uint64_t getFodUsageBits(uint64_t usageBits, __unused bool touched) {
+-    return usageBits;
+-}
+-#endif
+diff --git a/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp b/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp
+index ebf651e..5f96207 100644
+--- a/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp
++++ b/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp
+@@ -16,13 +16,13 @@
+ 
+ #include <android-base/stringprintf.h>
+ #include <compositionengine/DisplayColorProfile.h>
+-#include <compositionengine/FodExtension.h>
+ #include <compositionengine/LayerFE.h>
+ #include <compositionengine/LayerFECompositionState.h>
+ #include <compositionengine/Output.h>
+ #include <compositionengine/impl/OutputCompositionState.h>
+ #include <compositionengine/impl/OutputLayer.h>
+ #include <compositionengine/impl/OutputLayerCompositionState.h>
++#include <cutils/properties.h>
+ 
+ // TODO(b/129481165): remove the #pragma below and fix conversion issues
+ #pragma clang diagnostic push
+@@ -33,6 +33,10 @@
+ // TODO(b/129481165): remove the #pragma below and fix conversion issues
+ #pragma clang diagnostic pop // ignored "-Wconversion"
+ 
++static bool sCheckedProps = false;
++static bool sBBKFod = false;
++static bool sXiaomiFod = false;
++
+ namespace android::compositionengine {
+ 
+ OutputLayer::~OutputLayer() = default;
+@@ -371,11 +375,31 @@ void OutputLayer::writeOutputDependentGeometryStateToHWC(
+               static_cast<int32_t>(error));
+     }
+ 
++    if(!sCheckedProps) {
++        sCheckedProps = true;
++        sBBKFod = property_get_bool("persist.sys.phh.fod.bbk", false);
++        sXiaomiFod = property_get_bool("persist.sys.phh.fod.xiaomi", false);
++    }
++
+     uint32_t z = outputDependentState.z;
+-    if (strcmp(getLayerFE().getDebugName(), FOD_LAYER_NAME) == 0) {
+-        z = getFodZOrder(z, false);
+-    } else if (strcmp(getLayerFE().getDebugName(), FOD_TOUCHED_LAYER_NAME) == 0) {
+-        z = getFodZOrder(z, true);
++    if(strstr(getLayerFE().getDebugName(), "Fingerprint on display") != nullptr) {
++        ALOGE("Found fingerprint on display!");
++        z = 0x41000031;
++        if(sBBKFod) {
++            z = 0x41000031;
++        } else if(sXiaomiFod) {
++            z |= 0x1000000;
++        }
++    }
++
++    if(strstr(getLayerFE().getDebugName(), "Fingerprint on display.touched") != nullptr) {
++        ALOGE("Found fingerprint on display touched!");
++        z = 0x41000033;
++        if(sBBKFod) {
++            z = 0x41000033;
++        } else if(sXiaomiFod) {
++            z |= 0x2000000;
++        }
+     }
+ 
+     if (auto error = hwcLayer->setZOrder(z); error != hal::Error::NONE) {
+diff --git a/services/surfaceflinger/DisplayHardware/HWComposer.cpp b/services/surfaceflinger/DisplayHardware/HWComposer.cpp
+index 7a2f0f3..1ea1045 100644
+--- a/services/surfaceflinger/DisplayHardware/HWComposer.cpp
++++ b/services/surfaceflinger/DisplayHardware/HWComposer.cpp
+@@ -34,6 +34,7 @@
+ #include <ui/GraphicBuffer.h>
+ #include <utils/Errors.h>
+ #include <utils/Trace.h>
++#include <android-base/properties.h>
+ 
+ #include "../Layer.h" // needed only for debugging
+ #include "../Promise.h"
+@@ -500,12 +501,22 @@ status_t HWComposer::getDeviceCompositionChanges(
+ 
+     hal::Error error = hal::Error::NONE;
+ 
++    static int forceNoPresentOrValidate = -1;
++    if(forceNoPresentOrValidate == -1) {
++        bool res = android::base::GetBoolProperty("persist.sys.phh.no_present_or_validate", false);
++        if(res) {
++            forceNoPresentOrValidate = 1;
++        } else {
++            forceNoPresentOrValidate = 0;
++        }
++    }
++
+     // First try to skip validate altogether when there is no client
+     // composition.  When there is client composition, since we haven't
+     // rendered to the client target yet, we should not attempt to skip
+     // validate.
+     displayData.validateWasSkipped = false;
+-    if (!frameUsesClientComposition) {
++    if (forceNoPresentOrValidate == 0 && !frameUsesClientComposition) {
+         sp<Fence> outPresentFence;
+         uint32_t state = UINT32_MAX;
+         error = hwcDisplay->presentOrValidate(&numTypes, &numRequests, &outPresentFence , &state);
+diff --git a/services/vr/hardware_composer/manifest_vr_hwc.xml b/services/vr/hardware_composer/manifest_vr_hwc.xml
+index 1068cac..6694ac0 100644
+--- a/services/vr/hardware_composer/manifest_vr_hwc.xml
++++ b/services/vr/hardware_composer/manifest_vr_hwc.xml
+@@ -2,7 +2,7 @@
+     <hal>
+       <name>android.hardware.graphics.composer</name>
+       <transport>hwbinder</transport>
+-      <version>2.1</version>
++      <version>2.3</version>
+       <interface>
+           <name>IComposer</name>
+           <instance>vr</instance>

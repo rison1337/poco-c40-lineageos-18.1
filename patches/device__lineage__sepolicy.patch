@@ -1,0 +1,11 @@
+diff --git a/common/private/genfs_contexts b/common/private/genfs_contexts
+deleted file mode 100644
+index c629305..0000000
+--- a/common/private/genfs_contexts
++++ /dev/null
+@@ -1,5 +0,0 @@
+-ifelse(board_excludes_fuseblk_sepolicy, `true', ,
+-genfscon fuseblk / u:object_r:vfat:s0
+-)
+-
+-genfscon sysfs /devices/virtual/timed_output/vibrator u:object_r:sysfs_vibrator:s0

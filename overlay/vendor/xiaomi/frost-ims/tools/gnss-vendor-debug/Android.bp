@@ -1,0 +1,7 @@
+cc_binary {
+    name: "c40_gnss_vendor_debug",
+    installable: false,
+    srcs: ["main.cpp"],
+    shared_libs: ["libhidlbase", "libutils"],
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+}

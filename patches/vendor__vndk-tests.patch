@@ -1,0 +1,31 @@
+diff --git a/run.sh b/run.sh
+index 8f8d5c5..055ea91 100644
+--- a/run.sh
++++ b/run.sh
+@@ -12,12 +12,13 @@ TARGET_INCLUDE=linux
+ if [ "$HOST_OS" == "Darwin" ]; then
+   TARGET_INCLUDE=darwin
+ fi
++HOST_BIN="${OUT_DIR:-out}/host/${TARGET_INCLUDE}-x86/bin"
+ 
+ t="$(mktemp)"
+ [ -f "$2"/system/etc/selinux/mapping/26.0.cil ] && for vndk in 26 27;do
+ 	for src in $(find "$1"/sepolicies/$vndk/ -name \*.cil);do
+-		./out/host/${TARGET_INCLUDE}-x86/bin/secilc "$2"/system/etc/selinux/plat_sepolicy.cil -o "$t" -M true -G -N -c 30 "$2"/system/etc/selinux/mapping/${vndk}.0.cil $sext "$src"
+-		./out/host/${TARGET_INCLUDE}-x86/bin/checkpolicy -M -bC -o /dev/null "$t"
++		"$HOST_BIN/secilc" "$2"/system/etc/selinux/plat_sepolicy.cil -o "$t" -M true -G -N -c 30 "$2"/system/etc/selinux/mapping/${vndk}.0.cil $sext "$src"
++		"$HOST_BIN/checkpolicy" -M -bC -o /dev/null "$t"
+ 		rm -f "$t"
+ 	done
+ done
+@@ -25,8 +26,8 @@ done
+ for vndk in 28 29 30;do
+ 	for src in $(find "$1"/sepolicies/$vndk -name \*sepolicy.cil);do
+ 		plat_pub="$(echo "$src" |sed -E 's/_sepolicy.cil$/_plat_pub.cil/g')"
+-		./out/host/${TARGET_INCLUDE}-x86/bin/secilc -vvvv "$2"/system/etc/selinux/plat_sepolicy.cil -o "$t" -m -M true -G -N -c 30 "$2"/system/etc/selinux/mapping/${vndk}.0.cil $sext "$plat_pub" "$src"
+-		./out/host/${TARGET_INCLUDE}-x86/bin/checkpolicy -M -bC -o /dev/null "$t"
++		"$HOST_BIN/secilc" -vvvv "$2"/system/etc/selinux/plat_sepolicy.cil -o "$t" -m -M true -G -N -c 30 "$2"/system/etc/selinux/mapping/${vndk}.0.cil $sext "$plat_pub" "$src"
++		"$HOST_BIN/checkpolicy" -M -bC -o /dev/null "$t"
+ 		rm -f "$t"
+ 	done
+ done

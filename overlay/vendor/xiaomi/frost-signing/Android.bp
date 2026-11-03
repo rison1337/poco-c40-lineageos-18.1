@@ -1,0 +1,111 @@
+// Public module declarations; private key files are read-only bind-mounted at build time.
+
+android_app_certificate {
+    name: "C40_com_android_adbd_certificate",
+    certificate: "keys/com.android.adbd",
+}
+
+android_app_certificate {
+    name: "C40_com_android_art_release_certificate",
+    certificate: "keys/com.android.art",
+}
+
+android_app_certificate {
+    name: "C40_com_android_cellbroadcast_certificate",
+    certificate: "keys/com.android.cellbroadcast",
+}
+
+android_app_certificate {
+    name: "C40_com_android_conscrypt_certificate",
+    certificate: "keys/com.android.conscrypt",
+}
+
+android_app_certificate {
+    name: "C40_com_android_extservices_certificate",
+    certificate: "keys/com.android.extservices",
+}
+
+android_app_certificate {
+    name: "C40_com_android_i18n_certificate",
+    certificate: "keys/com.android.i18n",
+}
+
+android_app_certificate {
+    name: "C40_com_android_ipsec_certificate",
+    certificate: "keys/com.android.ipsec",
+}
+
+android_app_certificate {
+    name: "C40_com_android_media_certificate",
+    certificate: "keys/com.android.media",
+}
+
+android_app_certificate {
+    name: "C40_com_android_media_swcodec_certificate",
+    certificate: "keys/com.android.media.swcodec",
+}
+
+android_app_certificate {
+    name: "C40_com_android_mediaprovider_certificate",
+    certificate: "keys/com.android.mediaprovider",
+}
+
+android_app_certificate {
+    name: "C40_com_android_neuralnetworks_certificate",
+    certificate: "keys/com.android.neuralnetworks",
+}
+
+android_app_certificate {
+    name: "C40_com_android_os_statsd_certificate",
+    certificate: "keys/com.android.os.statsd",
+}
+
+android_app_certificate {
+    name: "C40_com_android_permission_certificate",
+    certificate: "keys/com.android.permission",
+}
+
+android_app_certificate {
+    name: "C40_com_android_resolv_certificate",
+    certificate: "keys/com.android.resolv",
+}
+
+android_app_certificate {
+    name: "C40_com_android_runtime_certificate",
+    certificate: "keys/com.android.runtime",
+}
+
+android_app_certificate {
+    name: "C40_com_android_sdkext_certificate",
+    certificate: "keys/com.android.sdkext",
+}
+
+android_app_certificate {
+    name: "C40_com_android_tethering_certificate",
+    certificate: "keys/com.android.tethering",
+}
+
+android_app_certificate {
+    name: "C40_com_android_tzdata_certificate",
+    certificate: "keys/com.android.tzdata",
+}
+
+android_app_certificate {
+    name: "C40_com_android_vndk_current_certificate",
+    certificate: "keys/com.android.vndk.current",
+}
+
+android_app_certificate {
+    name: "C40_com_android_wifi_certificate",
+    certificate: "keys/com.android.wifi",
+}
+
+android_app_certificate {
+    name: "C40_ServiceWifiResources_certificate",
+    certificate: "keys/c40.ServiceWifiResources",
+}
+
+android_app_certificate {
+    name: "C40_OsuLogin_certificate",
+    certificate: "keys/c40.OsuLogin",
+}

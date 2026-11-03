@@ -1,0 +1,143 @@
+diff --git a/src/com/android/settings/connecteddevice/PreviouslyConnectedDevicePreferenceController.java b/src/com/android/settings/connecteddevice/PreviouslyConnectedDevicePreferenceController.java
+index 438a381..2262717 100644
+--- a/src/com/android/settings/connecteddevice/PreviouslyConnectedDevicePreferenceController.java
++++ b/src/com/android/settings/connecteddevice/PreviouslyConnectedDevicePreferenceController.java
+@@ -144,7 +144,10 @@ public class PreviouslyConnectedDevicePreferenceController extends BasePreferenc
+ 
+     private void addPreference(int index, Preference preference) {
+         if (preference instanceof BluetoothDevicePreference) {
+-            if (mDevicesList.size() >= index) {
++            // The adapter can return no recent devices while Bluetooth is
++            // turning off, even though a saved-device disconnect arrives.
++            // indexOf then returns -1; keep that saved device at the end.
++            if (index >= 0 && mDevicesList.size() >= index) {
+                 mDevicesList.add(index, preference);
+             } else {
+                 mDevicesList.add(preference);
+diff --git a/src/com/android/settings/connecteddevice/usb/UsbConnectionBroadcastReceiver.java b/src/com/android/settings/connecteddevice/usb/UsbConnectionBroadcastReceiver.java
+index a203534..86c8564 100644
+--- a/src/com/android/settings/connecteddevice/usb/UsbConnectionBroadcastReceiver.java
++++ b/src/com/android/settings/connecteddevice/usb/UsbConnectionBroadcastReceiver.java
+@@ -78,6 +78,13 @@ public class UsbConnectionBroadcastReceiver extends BroadcastReceiver implements
+             mFunctions = functions;
+             mDataRole = mUsbBackend.getDataRole();
+             mPowerRole = mUsbBackend.getPowerRole();
++                //If we have no USB HAL, mDataRole is invalid
++                //But we can't be connected AND have none data_role, so it's safe.
++		//It would be better to fix UsbManager when no HAL is available, but that's more work
++                if(mDataRole == UsbPortStatus.DATA_ROLE_NONE &&
++                        intent.getExtras().getBoolean(UsbManager.USB_CONNECTED) &&
++                        !intent.getExtras().getBoolean(UsbManager.USB_HOST_CONNECTED))
++                    mDataRole = UsbPortStatus.DATA_ROLE_DEVICE;
+         } else if (UsbManager.ACTION_USB_PORT_CHANGED.equals(intent.getAction())) {
+             UsbPortStatus portStatus = intent.getExtras()
+                     .getParcelable(UsbManager.EXTRA_PORT_STATUS);
+diff --git a/src/com/android/settings/display/BrightnessLevelPreferenceController.java b/src/com/android/settings/display/BrightnessLevelPreferenceController.java
+index 2e54572..3018fd3 100644
+--- a/src/com/android/settings/display/BrightnessLevelPreferenceController.java
++++ b/src/com/android/settings/display/BrightnessLevelPreferenceController.java
+@@ -55,6 +55,7 @@ public class BrightnessLevelPreferenceController extends AbstractPreferenceContr
+ 
+     private final float mMinBrightness;
+     private final float mMaxBrightness;
++    private final float mDefaultBrightness;
+     private final float mMinVrBrightness;
+     private final float mMaxVrBrightness;
+     private final ContentResolver mContentResolver;
+@@ -85,6 +86,8 @@ public class BrightnessLevelPreferenceController extends AbstractPreferenceContr
+                 PowerManager.BRIGHTNESS_CONSTRAINT_TYPE_MINIMUM);
+         mMaxBrightness = powerManager.getBrightnessConstraint(
+                 PowerManager.BRIGHTNESS_CONSTRAINT_TYPE_MAXIMUM);
++        mDefaultBrightness = powerManager.getBrightnessConstraint(
++                PowerManager.BRIGHTNESS_CONSTRAINT_TYPE_DEFAULT);
+         mMinVrBrightness = powerManager.getBrightnessConstraint(
+                 PowerManager.BRIGHTNESS_CONSTRAINT_TYPE_MINIMUM_VR);
+         mMaxVrBrightness = powerManager.getBrightnessConstraint(
+@@ -139,7 +142,7 @@ public class BrightnessLevelPreferenceController extends AbstractPreferenceContr
+                     mMinVrBrightness, mMaxVrBrightness);
+         } else {
+             value = convertLinearToGammaFloat(Settings.System.getFloat(mContentResolver,
+-                    System.SCREEN_BRIGHTNESS_FLOAT, mMinBrightness),
++                    System.SCREEN_BRIGHTNESS_FLOAT, mDefaultBrightness),
+                     mMinBrightness, mMaxBrightness);
+         }
+         return getPercentage(value, GAMMA_SPACE_MIN, GAMMA_SPACE_MAX);
+diff --git a/tests/robotests/Android.bp b/tests/robotests/Android.bp
+index efef10a..56b8cb5 100644
+--- a/tests/robotests/Android.bp
++++ b/tests/robotests/Android.bp
+@@ -83,3 +83,27 @@ android_robolectric_test {
+         "SettingsLib-search",
+     ],
+ }
++
++// Keep the Bluetooth disconnect regression independently buildable when
++// unrelated legacy tests lag behind the GSI framework API.
++android_robolectric_test {
++    name: "C40SettingsBluetoothRoboTests",
++    srcs: [
++        "src/com/android/settings/connecteddevice/PreviouslyConnectedDevicePreferenceControllerTest.java",
++        "src/com/android/settings/testutils/**/*.java",
++        "src/com/android/settings/network/ShadowServiceManagerExtend.java",
++    ],
++    static_libs: [
++        "SettingsLib-robo-testutils",
++        "android-support-annotations",
++        "androidx.test.core",
++        "androidx.test.runner",
++        "androidx.test.ext.junit",
++    ],
++    java_resource_dirs: ["config", "resources"],
++    instrumentation_for: "SettingsRoboTestStub",
++    test_options: {
++        timeout: 600,
++        shards: 1,
++    },
++}
+diff --git a/tests/robotests/src/com/android/settings/connecteddevice/PreviouslyConnectedDevicePreferenceControllerTest.java b/tests/robotests/src/com/android/settings/connecteddevice/PreviouslyConnectedDevicePreferenceControllerTest.java
+index d73471f..696bd6b 100644
+--- a/tests/robotests/src/com/android/settings/connecteddevice/PreviouslyConnectedDevicePreferenceControllerTest.java
++++ b/tests/robotests/src/com/android/settings/connecteddevice/PreviouslyConnectedDevicePreferenceControllerTest.java
+@@ -55,6 +55,7 @@ import org.robolectric.annotation.Config;
+ import org.robolectric.shadow.api.Shadow;
+ 
+ import java.util.ArrayList;
++import java.util.Collections;
+ import java.util.List;
+ 
+ @RunWith(RobolectricTestRunner.class)
+@@ -188,6 +189,34 @@ public class PreviouslyConnectedDevicePreferenceControllerTest {
+         assertThat(mPreferenceGroup.getPreferenceCount()).isEqualTo(2);
+     }
+ 
++    @Test
++    public void onDeviceAdded_recentDevicesEmpty_displaySavedDevice() {
++        mShadowBluetoothAdapter.setMostRecentlyConnectedDevices(Collections.emptyList());
++        final BluetoothDevicePreference preference = new BluetoothDevicePreference(
++                mContext, mCachedDevice1, true, BluetoothDevicePreference.SortType.TYPE_NO_SORT);
++
++        mPreConnectedDeviceController.onDeviceAdded(preference);
++
++        assertThat(mPreferenceGroup.getPreferenceCount()).isEqualTo(2);
++    }
++
++    @Test
++    public void onDeviceAdded_deviceAbsentFromRecents_appendAfterKnownDevice() {
++        mShadowBluetoothAdapter.setMostRecentlyConnectedDevices(
++                Collections.singletonList(mBluetoothDevice2));
++        final BluetoothDevicePreference known = new BluetoothDevicePreference(
++                mContext, mCachedDevice2, true, BluetoothDevicePreference.SortType.TYPE_NO_SORT);
++        final BluetoothDevicePreference missing = new BluetoothDevicePreference(
++                mContext, mCachedDevice1, true, BluetoothDevicePreference.SortType.TYPE_NO_SORT);
++
++        mPreConnectedDeviceController.onDeviceAdded(known);
++        mPreConnectedDeviceController.onDeviceAdded(missing);
++
++        assertThat(mPreferenceGroup.getPreferenceCount()).isEqualTo(3);
++        assertThat(known.getOrder()).isEqualTo(0);
++        assertThat(missing.getOrder()).isEqualTo(1);
++    }
++
+     @Test
+     public void onDeviceAdded_addDockDevicePreference_displayIt() {
+         final SingleTargetGearPreference dockPreference = new SingleTargetGearPreference(

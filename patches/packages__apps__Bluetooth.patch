@@ -1,0 +1,40 @@
+diff --git a/Android.bp b/Android.bp
+index c16faff..08e0ee1 100644
+--- a/Android.bp
++++ b/Android.bp
+@@ -1,8 +1,3 @@
+-// Bluetooth is in it's own namespace to allow it to be replaced with an
+-// alternate implementation.
+-soong_namespace {
+-}
+-
+ // MAP API module
+ 
+ java_library {
+diff --git a/res/values/config.xml b/res/values/config.xml
+index adfc735..fd83587 100644
+--- a/res/values/config.xml
++++ b/res/values/config.xml
+@@ -118,5 +118,5 @@
+     <string name="exposure_notification_package">com.google.android.gms</string>
+ 
+     <!-- If true, SCO sample rate will be reported via g_sco_samplerate audio parameter -->
+-    <bool name="sco_report_samplerate">false</bool>
++    <bool name="sco_report_samplerate">true</bool>
+ </resources>
+diff --git a/tests/robotests/Android.mk b/tests/robotests/Android.mk
+index 678ab4b..0cb6917 100644
+--- a/tests/robotests/Android.mk
++++ b/tests/robotests/Android.mk
+@@ -1,5 +1,3 @@
+-ifneq ($(TARGET_USE_QTI_BT_STACK),true)
+-
+ #############################################################
+ # Bluetooth Robolectric test target.                        #
+ #############################################################
+@@ -47,5 +45,3 @@ LOCAL_TEST_PACKAGE := Bluetooth
+ LOCAL_INSTRUMENT_SOURCE_DIRS := $(dir $(LOCAL_PATH))../src
+ 
+ include external/robolectric-shadows/run_robotests.mk
+-
+-endif

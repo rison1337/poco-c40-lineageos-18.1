@@ -1,0 +1,512 @@
+diff --git a/CleanSpec.mk b/CleanSpec.mk
+index 0a534a2..81150a0 100644
+--- a/CleanSpec.mk
++++ b/CleanSpec.mk
+@@ -80,8 +80,6 @@ $(call add-clean-step, rm -rf $(PRODUCT_OUT)/system/etc/vndksp.libraries.txt)
+ $(call add-clean-step, rm -rf $(PRODUCT_OUT)/recovery/root/)
+ $(call add-clean-step, rm -rf $(PRODUCT_OUT)/root/sbin/charger)
+ $(call add-clean-step, rm -rf $(PRODUCT_OUT)/recovery/root/sbin/charger)
+-$(call add-clean-step, rm -rf $(PRODUCT_OUT)/root/sbin)
+-$(call add-clean-step, rm -rf $(PRODUCT_OUT)/recovery/root/sbin)
+ $(call add-clean-step, rm -rf $(PRODUCT_OUT)/product_services)
+ $(call add-clean-step, rm -rf $(PRODUCT_OUT)/product_services.img)
+ $(call add-clean-step, rm -rf $(PRODUCT_OUT)/system/product_services)
+diff --git a/adb/daemon/usb.cpp b/adb/daemon/usb.cpp
+index 5561b16..c0e119d 100644
+--- a/adb/daemon/usb.cpp
++++ b/adb/daemon/usb.cpp
+@@ -783,6 +783,13 @@ void usb_init() {
+             "persist.adb.nonblocking_ffs",
+             android::base::GetBoolProperty("ro.adb.nonblocking_ffs", true));
+ 
++    // PHH's persisted legacy override may survive earlier test boots.
++    // frost needs aligned AIO reads: short sync reads caused a stock-kernel
++    // usercopy panic in __ffs_epfile_read_data (saved in console-ramoops).
++    if (android::base::GetProperty("ro.product.vendor.device", "") == "frost") {
++        use_nonblocking = true;
++        LOG(INFO) << "frost: using aligned asynchronous FunctionFS transport";
++    }
+     if (use_nonblocking) {
+         std::thread(usb_ffs_open_thread).detach();
+     } else {
+diff --git a/init/Android.bp b/init/Android.bp
+index f292d68..4865694 100644
+--- a/init/Android.bp
++++ b/init/Android.bp
+@@ -71,14 +71,6 @@ init_host_sources = [
+     "host_init_verifier.cpp",
+ ]
+ 
+-cc_library_static {
+-    name: "vendor_init",
+-    recovery_available: true,
+-    srcs: [
+-        "vendor_init.cpp",
+-    ],
+-}
+-
+ cc_defaults {
+     name: "init_defaults",
+     cpp_std: "experimental",
+@@ -169,7 +161,6 @@ cc_library_static {
+     defaults: [
+         "init_defaults",
+         "selinux_policy_version",
+-        "vendor_init_defaults",
+     ],
+     srcs: init_common_sources + init_device_sources,
+     whole_static_libs: [
+diff --git a/init/NOTICE b/init/NOTICE
+index 383d0f5..c5b1efa 100644
+--- a/init/NOTICE
++++ b/init/NOTICE
+@@ -188,29 +188,3 @@
+ 
+    END OF TERMS AND CONDITIONS
+ 
+-Copyright (c) 2013, The Linux Foundation. All rights reserved.
+-
+-Redistribution and use in source and binary forms, with or without
+-modification, are permitted provided that the following conditions are
+-met:
+-    * Redistributions of source code must retain the above copyright
+-      notice, this list of conditions and the following disclaimer.
+-    * Redistributions in binary form must reproduce the above
+-      copyright notice, this list of conditions and the following
+-      disclaimer in the documentation and/or other materials provided
+-      with the distribution.
+-    * Neither the name of The Linux Foundation nor the names of its
+-      contributors may be used to endorse or promote products derived
+-      from this software without specific prior written permission.
+-
+-THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+-WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+-ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+-BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+-WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+-OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+-IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+diff --git a/init/first_stage_mount.cpp b/init/first_stage_mount.cpp
+index 8eb2f97..990d769 100644
+--- a/init/first_stage_mount.cpp
++++ b/init/first_stage_mount.cpp
+@@ -809,7 +809,13 @@ bool DoFirstStageMount() {
+         LOG(ERROR) << "Failed to create FirstStageMount";
+         return false;
+     }
+-    return handle->DoFirstStageMount();
++    if(!handle->DoFirstStageMount()) {
++	    handle = nullptr;
++	    auto fstab = ReadFirstStageFstab();
++	    std::unique_ptr<FirstStageMount> v = std::make_unique<FirstStageMountVBootV1>(std::move(fstab));
++	    return v->DoFirstStageMount();
++    }
++    return true;
+ }
+ 
+ void SetInitAvbVersionInRecovery() {
+diff --git a/init/property_service.cpp b/init/property_service.cpp
+index 42dd5af..019955b 100644
+--- a/init/property_service.cpp
++++ b/init/property_service.cpp
+@@ -70,7 +70,6 @@
+ #include "subcontext.h"
+ #include "system/core/init/property_service.pb.h"
+ #include "util.h"
+-#include "vendor_init.h"
+ 
+ using namespace std::literals;
+ 
+@@ -874,6 +873,69 @@ static void property_derive_build_fingerprint() {
+     }
+ }
+ 
++// If the ro.product.cpu.abilist* properties have not been explicitly
++// set, derive them from ro.${partition}.product.cpu.abilist* properties.
++static void property_initialize_ro_cpu_abilist() {
++    // From high to low priority.
++    const char* kAbilistSources[] = {
++            "product",
++            "odm",
++            "vendor",
++            "system",
++    };
++    const std::string EMPTY = "";
++    const char* kAbilistProp = "ro.product.cpu.abilist";
++    const char* kAbilist32Prop = "ro.product.cpu.abilist32";
++    const char* kAbilist64Prop = "ro.product.cpu.abilist64";
++
++    // If the properties are defined explicitly, just use them.
++    if (GetProperty(kAbilistProp, EMPTY) != EMPTY) {
++        return;
++    }
++
++    // Find the first source defining these properties by order.
++    std::string abilist32_prop_val;
++    std::string abilist64_prop_val;
++    for (const auto& source : kAbilistSources) {
++        const auto abilist32_prop = std::string("ro.") + source + ".product.cpu.abilist32";
++        const auto abilist64_prop = std::string("ro.") + source + ".product.cpu.abilist64";
++        abilist32_prop_val = GetProperty(abilist32_prop, EMPTY);
++        abilist64_prop_val = GetProperty(abilist64_prop, EMPTY);
++        // The properties could be empty on 32-bit-only or 64-bit-only devices,
++        // but we cannot identify a property is empty or undefined by GetProperty().
++        // So, we assume both of these 2 properties are empty as undefined.
++        if (abilist32_prop_val != EMPTY || abilist64_prop_val != EMPTY) {
++            break;
++        }
++    }
++
++    // Merge ABI lists for ro.product.cpu.abilist
++    auto abilist_prop_val = abilist64_prop_val;
++    if (abilist32_prop_val != EMPTY) {
++        if (abilist_prop_val != EMPTY) {
++            abilist_prop_val += ",";
++        }
++        abilist_prop_val += abilist32_prop_val;
++    }
++
++    // Set these properties
++    const std::pair<const char*, const std::string&> set_prop_list[] = {
++            {kAbilistProp, abilist_prop_val},
++            {kAbilist32Prop, abilist32_prop_val},
++            {kAbilist64Prop, abilist64_prop_val},
++    };
++    for (const auto& [prop, prop_val] : set_prop_list) {
++        LOG(INFO) << "Setting property '" << prop << "' to '" << prop_val << "'";
++
++        std::string error;
++        uint32_t res = PropertySet(prop, prop_val, &error);
++        if (res != PROP_SUCCESS) {
++            LOG(ERROR) << "Error setting property '" << prop << "': err=" << res << " (" << error
++                       << ")";
++        }
++    }
++}
++
+ void PropertyLoadBootDefaults() {
+     // TODO(b/117892318): merge prop.default and build.prop files into one
+     // We read the properties and their values into a map, in order to always allow properties
+@@ -913,11 +975,9 @@ void PropertyLoadBootDefaults() {
+         }
+     }
+ 
+-    // Update with vendor-specific property runtime overrides
+-    vendor_load_properties();
+-
+     property_initialize_ro_product_props();
+     property_derive_build_fingerprint();
++    property_initialize_ro_cpu_abilist();
+ 
+     if (android::base::GetBoolProperty("ro.persistent_properties.ready", false)) {
+         update_sys_usb_config();
+diff --git a/init/reboot_utils.cpp b/init/reboot_utils.cpp
+index 76460a5..5a12dd7 100644
+--- a/init/reboot_utils.cpp
++++ b/init/reboot_utils.cpp
+@@ -34,7 +34,7 @@
+ namespace android {
+ namespace init {
+ 
+-static std::string init_fatal_reboot_target = "bootloader";
++static std::string init_fatal_reboot_target = "recovery";
+ static bool init_fatal_panic = false;
+ 
+ void SetFatalRebootTarget() {
+@@ -48,7 +48,7 @@ void SetFatalRebootTarget() {
+     const char kRebootTargetString[] = "androidboot.init_fatal_reboot_target=";
+     auto start_pos = cmdline.find(kRebootTargetString);
+     if (start_pos == std::string::npos) {
+-        return;  // We already default to bootloader if no setting is provided.
++        return;  // We already default to recovery if no setting is provided
+     }
+     start_pos += sizeof(kRebootTargetString) - 1;
+ 
+diff --git a/init/vendor_init.cpp b/init/vendor_init.cpp
+deleted file mode 100644
+index d3fd5ff..0000000
+--- a/init/vendor_init.cpp
++++ /dev/null
+@@ -1,37 +0,0 @@
+-/*
+-Copyright (c) 2013, The Linux Foundation. All rights reserved.
+-
+-Redistribution and use in source and binary forms, with or without
+-modification, are permitted provided that the following conditions are
+-met:
+-    * Redistributions of source code must retain the above copyright
+-      notice, this list of conditions and the following disclaimer.
+-    * Redistributions in binary form must reproduce the above
+-      copyright notice, this list of conditions and the following
+-      disclaimer in the documentation and/or other materials provided
+-      with the distribution.
+-    * Neither the name of The Linux Foundation nor the names of its
+-      contributors may be used to endorse or promote products derived
+-      from this software without specific prior written permission.
+-
+-THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+-WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+-ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+-BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+-WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+-OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+-IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- */
+-
+-#include "vendor_init.h"
+-
+-/* init vendor override stubs */
+-
+-__attribute__ ((weak))
+-void vendor_load_properties()
+-{
+-}
+diff --git a/init/vendor_init.h b/init/vendor_init.h
+deleted file mode 100644
+index 9afb449..0000000
+--- a/init/vendor_init.h
++++ /dev/null
+@@ -1,33 +0,0 @@
+-/*
+-Copyright (c) 2013, The Linux Foundation. All rights reserved.
+-
+-Redistribution and use in source and binary forms, with or without
+-modification, are permitted provided that the following conditions are
+-met:
+-    * Redistributions of source code must retain the above copyright
+-      notice, this list of conditions and the following disclaimer.
+-    * Redistributions in binary form must reproduce the above
+-      copyright notice, this list of conditions and the following
+-      disclaimer in the documentation and/or other materials provided
+-      with the distribution.
+-    * Neither the name of The Linux Foundation nor the names of its
+-      contributors may be used to endorse or promote products derived
+-      from this software without specific prior written permission.
+-
+-THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+-WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
+-ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
+-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+-BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+-WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+-OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+-IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- */
+-
+-#ifndef __INIT_VENDOR__H__
+-#define __INIT_VENDOR__H__
+-extern void vendor_load_properties(void);
+-#endif /* __INIT_VENDOR__H__ */
+diff --git a/libcutils/fs_config.cpp b/libcutils/fs_config.cpp
+index 5805a4d..b30707f 100644
+--- a/libcutils/fs_config.cpp
++++ b/libcutils/fs_config.cpp
+@@ -80,6 +80,7 @@ static const struct fs_path_config android_dirs[] = {
+     { 00771, AID_SYSTEM,       AID_SYSTEM,       0, "data" },
+     { 00755, AID_ROOT,         AID_SYSTEM,       0, "mnt" },
+     { 00751, AID_ROOT,         AID_SHELL,        0, "product/bin" },
++    { 00750, AID_ROOT,         AID_SHELL,        0, "sbin" },
+     { 00777, AID_ROOT,         AID_ROOT,         0, "sdcard" },
+     { 00751, AID_ROOT,         AID_SDCARD_R,     0, "storage" },
+     { 00751, AID_ROOT,         AID_SHELL,        0, "system/bin" },
+@@ -164,6 +165,7 @@ static const struct fs_path_config android_files[] = {
+     { 00600, AID_ROOT,      AID_ROOT,      0, "system_ext/build.prop" },
+     { 00444, AID_ROOT,      AID_ROOT,      0, system_ext_conf_dir + 1 },
+     { 00444, AID_ROOT,      AID_ROOT,      0, system_ext_conf_file + 1 },
++    { 00750, AID_ROOT,      AID_SHELL,     0, "sbin/fs_mgr" },
+     { 00755, AID_ROOT,      AID_SHELL,     0, "system/bin/crash_dump32" },
+     { 00755, AID_ROOT,      AID_SHELL,     0, "system/bin/crash_dump64" },
+     { 00755, AID_ROOT,      AID_SHELL,     0, "system/bin/debuggerd" },
+@@ -209,6 +211,7 @@ static const struct fs_path_config android_files[] = {
+     { 00750, AID_ROOT,      AID_SHELL,     0, "init*" },
+     { 00755, AID_ROOT,      AID_SHELL,     0, "odm/bin/*" },
+     { 00755, AID_ROOT,      AID_SHELL,     0, "product/bin/*" },
++    { 00750, AID_ROOT,      AID_SHELL,     0, "sbin/*" },
+     { 00755, AID_ROOT,      AID_SHELL,     0, "system/bin/*" },
+     { 00755, AID_ROOT,      AID_SHELL,     0, "system/xbin/*" },
+     { 00755, AID_ROOT,      AID_SHELL,     0, "system/apex/*/bin/*" },
+diff --git a/logcat/logcatd.rc b/logcat/logcatd.rc
+index 64d5500..bf41be2 100644
+--- a/logcat/logcatd.rc
++++ b/logcat/logcatd.rc
+@@ -60,3 +60,11 @@ service logcatd /system/bin/logcatd -L -b ${logd.logpersistd.buffer:-all} -v thr
+     group log
+     writepid /dev/cpuset/system-background/tasks
+     oom_score_adjust -600
++
++# C40 stock vendor enables a 500 MiB persistent recorder after a data wipe.
++# Queue the canonical stop after CE-ready actions; retain native ring buffers.
++on property:sys.user.0.ce_available=true && property:ro.product.vendor.device=frost
++    trigger c40-stop-persistent-logcat
++
++on c40-stop-persistent-logcat
++    setprop logd.logpersistd stop
+diff --git a/logd/LogKlog.cpp b/logd/LogKlog.cpp
+index edd326a..8ff719f 100644
+--- a/logd/LogKlog.cpp
++++ b/logd/LogKlog.cpp
+@@ -238,6 +238,9 @@ bool LogKlog::onDataAvailable(SocketClient* cli) {
+             break;
+         }
+         if (retval < 0) {
++	    if(errno == EFAULT) {
++	        stopListener();
++	    }
+             return false;
+         }
+         len += retval;
+diff --git a/logd/LogListener.cpp b/logd/LogListener.cpp
+index ba61042..4f1df46 100644
+--- a/logd/LogListener.cpp
++++ b/logd/LogListener.cpp
+@@ -121,11 +121,8 @@ int LogListener::getLogSocket() {
+     if (sock < 0) {  // logd started up in init.sh
+         sock = socket_local_server(
+             socketName, ANDROID_SOCKET_NAMESPACE_RESERVED, SOCK_DGRAM);
+-
+-        int on = 1;
+-        if (setsockopt(sock, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on))) {
+-            return -1;
+-        }
+     }
++    int on = 1;
++    setsockopt(sock, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on));
+     return sock;
+ }
+diff --git a/property_service/libpropertyinfoserializer/property_info_serializer.cpp b/property_service/libpropertyinfoserializer/property_info_serializer.cpp
+index 803657a..ecdd0be 100644
+--- a/property_service/libpropertyinfoserializer/property_info_serializer.cpp
++++ b/property_service/libpropertyinfoserializer/property_info_serializer.cpp
+@@ -19,6 +19,7 @@
+ #include "property_info_parser/property_info_parser.h"
+ 
+ #include <set>
++#include <iostream>
+ 
+ #include "trie_builder.h"
+ #include "trie_serializer.h"
+@@ -34,7 +35,7 @@ bool BuildTrie(const std::vector<PropertyInfoEntry>& property_info,
+ 
+   for (const auto& [name, context, type, is_exact] : property_info) {
+     if (!trie_builder.AddToTrie(name, context, type, is_exact, error)) {
+-      return false;
++      std::cerr << "Failed adding " << name << " to property trie... let's hope for the best" << std::endl;
+     }
+   }
+ 
+diff --git a/rootdir/Android.mk b/rootdir/Android.mk
+index 7d383f5..6d518dc 100644
+--- a/rootdir/Android.mk
++++ b/rootdir/Android.mk
+@@ -77,7 +77,7 @@ endif
+ #
+ # create some directories (some are mount points) and symlinks
+ LOCAL_POST_INSTALL_CMD := mkdir -p $(addprefix $(TARGET_ROOT_OUT)/, \
+-    dev proc sys system data data_mirror odm oem acct config storage mnt apex debug_ramdisk \
++    sbin dev proc sys system data data_mirror odm oem acct config storage mnt apex debug_ramdisk \
+     linkerconfig postinstall $(BOARD_ROOT_EXTRA_FOLDERS)); \
+     ln -sf /system/bin $(TARGET_ROOT_OUT)/bin; \
+     ln -sf /system/etc $(TARGET_ROOT_OUT)/etc; \
+diff --git a/rootdir/init.environ.rc.in b/rootdir/init.environ.rc.in
+index fdaaf1a..72ba861 100644
+--- a/rootdir/init.environ.rc.in
++++ b/rootdir/init.environ.rc.in
+@@ -10,6 +10,7 @@ on early-init
+     export ANDROID_TZDATA_ROOT /apex/com.android.tzdata
+     export EXTERNAL_STORAGE /sdcard
+     export ASEC_MOUNTPOINT /mnt/asec
++    export PATH /sbin:/product/bin:/apex/com.android.runtime/bin:/apex/com.android.art/bin:/system_ext/bin:/system/bin:/system/xbin:/odm/bin:/vendor/bin:/vendor/xbin
+     export BOOTCLASSPATH %BOOTCLASSPATH%
+     export DEX2OATBOOTCLASSPATH %DEX2OATBOOTCLASSPATH%
+     export SYSTEMSERVERCLASSPATH %SYSTEMSERVERCLASSPATH%
+diff --git a/rootdir/init.rc b/rootdir/init.rc
+index a9af0b0..b136f10 100644
+--- a/rootdir/init.rc
++++ b/rootdir/init.rc
+@@ -11,6 +11,11 @@ import /vendor/etc/init/hw/init.${ro.hardware}.rc
+ import /system/etc/init/hw/init.usb.configfs.rc
+ import /system/etc/init/hw/init.${ro.zygote}.rc
+ 
++service gsicharger /bin/charger
++    class gsicharger
++    user system
++    group system shell input graphics wakelock
++
+ # Cgroups are mounted right before early-init using list from /etc/cgroups.json
+ on early-init
+     # Disable sysrq from keyboard
+@@ -399,7 +404,7 @@ on init
+ # Healthd can trigger a full boot from charger mode by signaling this
+ # property when the power button is held.
+ on property:sys.boot_from_charger_mode=1
+-    class_stop charger
++    class_stop gsicharger
+     trigger late-init
+ 
+ on load_persist_props_action
+@@ -945,8 +950,12 @@ on nonencrypted
+ on property:sys.init_log_level=*
+     loglevel ${sys.init_log_level}
+ 
++on charger && property:ro.hardware=mt*
++    write /sys/class/leds/lcd-backlight/trigger "backlight"
++    write /sys/class/android_usb/android0/enable 1
++
+ on charger
+-    class_start charger
++    class_start gsicharger
+ 
+ on property:vold.decrypt=trigger_load_persist_props
+     load_persist_props
+diff --git a/rootdir/ueventd.rc b/rootdir/ueventd.rc
+index 9c2cdf2..081037d 100644
+--- a/rootdir/ueventd.rc
++++ b/rootdir/ueventd.rc
+@@ -45,7 +45,7 @@ subsystem sound
+ 
+ # these should not be world writable
+ /dev/uhid                 0660   uhid       uhid
+-/dev/uinput               0660   uhid       uhid
++/dev/uinput               0666   uhid       uhid
+ /dev/rtc0                 0640   system     system
+ /dev/tty0                 0660   root       system
+ /dev/graphics/*           0660   root       graphics
+diff --git a/sdcard/sdcard.cpp b/sdcard/sdcard.cpp
+index 622de5b..e580190 100644
+--- a/sdcard/sdcard.cpp
++++ b/sdcard/sdcard.cpp
+@@ -32,6 +32,7 @@
+ #include <android-base/file.h>
+ #include <android-base/logging.h>
+ #include <android-base/macros.h>
++#include <android-base/properties.h>
+ #include <android-base/stringprintf.h>
+ #include <android-base/strings.h>
+ 
+@@ -103,11 +104,12 @@ static bool sdcardfs_setup(const std::string& source_path, const std::string& de
+                            mode_t mask, bool derive_gid, bool default_normal, bool unshared_obb,
+                            bool use_esdfs) {
+     // Add new options at the end of the vector.
++    int vndk = android::base::GetIntProperty<int>("ro.vndk.version", 29);
+     std::vector<std::string> new_opts_list;
+     if (multi_user) new_opts_list.push_back("multiuser,");
+-    if (derive_gid) new_opts_list.push_back("derive_gid,");
+-    if (default_normal) new_opts_list.push_back("default_normal,");
+-    if (unshared_obb) new_opts_list.push_back("unshared_obb,");
++    if (derive_gid && vndk >= 27) new_opts_list.push_back("derive_gid,");
++    if (default_normal && vndk >= 28) new_opts_list.push_back("default_normal,");
++    if (unshared_obb && vndk >= 29) new_opts_list.push_back("unshared_obb,");
+     // Try several attempts, each time with one less option, to gracefully
+     // handle older kernels that aren't updated yet.
+     for (int i = 0; i <= new_opts_list.size(); ++i) {

@@ -1,0 +1,29 @@
+{
+  "revision": "R1",
+  "status": "test-release",
+  "data_preserving_update_verified": true,
+  "critical_files_verified": 94,
+  "gps": {
+    "status": "working",
+    "satellite_fix_verified": true,
+    "fresh_callback_count": 66,
+    "saved_positions_checked": 14
+  },
+  "features_verified_during_development": [
+    "gps",
+    "wifi",
+    "cellular_calls_and_data",
+    "bluetooth_audio_and_microphones",
+    "wired_audio",
+    "cameras_and_hdr",
+    "fm_playback_and_recording",
+    "fingerprint_unlock",
+    "sensors",
+    "screen_rotation",
+    "vibration",
+    "usb",
+    "sleep_suspend"
+  ],
+  "public_release_published": false,
+  "all_system_functions_verified": false
+}

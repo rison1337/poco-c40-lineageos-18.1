@@ -1,0 +1,115 @@
+diff --git a/dexpreopt/config.go b/dexpreopt/config.go
+index 98850e5..91abaad 100644
+--- a/dexpreopt/config.go
++++ b/dexpreopt/config.go
+@@ -116,6 +116,7 @@ type ModuleConfig struct {
+ 	PresentOptionalUsesLibraries []string
+ 	UsesLibraries                []string
+ 	LibraryPaths                 map[string]android.Path
++	LibraryLocations             map[string]string
+ 
+ 	Archs                   []android.ArchType
+ 	DexPreoptImages         []android.Path
+diff --git a/dexpreopt/dexpreopt.go b/dexpreopt/dexpreopt.go
+index f984966..069adfb 100644
+--- a/dexpreopt/dexpreopt.go
++++ b/dexpreopt/dexpreopt.go
+@@ -252,8 +252,11 @@ func dexpreoptCommand(ctx android.PathContext, globalSoong *GlobalSoongConfig, g
+ 
+ 			classLoaderContextHost = append(classLoaderContextHost,
+ 				pathForLibrary(module, l))
+-			classLoaderContextTarget = append(classLoaderContextTarget,
+-				filepath.Join("/system/framework", l+".jar"))
++			location := module.LibraryLocations[l]
++			if location == "" {
++				location = filepath.Join("/system/framework", l+".jar")
++			}
++			classLoaderContextTarget = append(classLoaderContextTarget, location)
+ 		}
+ 
+ 		const httpLegacy = "org.apache.http.legacy"
+@@ -358,7 +361,7 @@ func dexpreoptCommand(ctx android.PathContext, globalSoong *GlobalSoongConfig, g
+ 	// Because on-device dexopt will see dex locations starting with /product, we change the paths
+ 	// to mimic this behavior.
+ 	dexLocationArg := module.DexLocation
+-	if strings.HasPrefix(dexLocationArg, "/system/product/") {
++	if strings.HasPrefix(dexLocationArg, "/system/product/") || strings.HasPrefix(dexLocationArg, "/system/system_ext/") {
+ 		dexLocationArg = strings.TrimPrefix(dexLocationArg, "/system")
+ 	}
+ 
+diff --git a/java/app.go b/java/app.go
+index f5eec2e..ef6cd7e 100755
+--- a/java/app.go
++++ b/java/app.go
+@@ -594,6 +594,7 @@ func (a *AndroidApp) dexBuildActions(ctx android.ModuleContext) android.Path {
+ 	a.dexpreopter.usesLibs = a.usesLibrary.usesLibraryProperties.Uses_libs
+ 	a.dexpreopter.optionalUsesLibs = a.usesLibrary.presentOptionalUsesLibs(ctx)
+ 	a.dexpreopter.libraryPaths = a.usesLibrary.usesLibraryPaths(ctx)
++	a.dexpreopter.libraryLocations = a.usesLibrary.usesLibraryLocations(ctx)
+ 	a.dexpreopter.manifestFile = a.mergedManifestFile
+ 
+ 	if ctx.ModuleName() != "framework-res" && ctx.ModuleName() != "org.lineageos.platform-res" {
+@@ -1500,6 +1501,7 @@ func (a *AndroidAppImport) generateAndroidBuildActions(ctx android.ModuleContext
+ 	a.dexpreopter.usesLibs = a.usesLibrary.usesLibraryProperties.Uses_libs
+ 	a.dexpreopter.optionalUsesLibs = a.usesLibrary.presentOptionalUsesLibs(ctx)
+ 	a.dexpreopter.libraryPaths = a.usesLibrary.usesLibraryPaths(ctx)
++	a.dexpreopter.libraryLocations = a.usesLibrary.usesLibraryLocations(ctx)
+ 
+ 	dexOutput := a.dexpreopter.dexpreopt(ctx, jnisUncompressed)
+ 	if a.dexpreopter.uncompressedDex {
+@@ -1908,6 +1910,23 @@ func (u *usesLibrary) usesLibraryPaths(ctx android.ModuleContext) map[string]and
+ 	return usesLibPaths
+ }
+ 
++// usesLibraryLocations records canonical runtime paths instead of assuming /system.
++func (u *usesLibrary) usesLibraryLocations(ctx android.ModuleContext) map[string]string {
++	locations := make(map[string]string)
++	if !ctx.Config().UnbundledBuild() {
++		ctx.VisitDirectDepsWithTag(usesLibTag, func(m android.Module) {
++			if lib, ok := m.(interface{ DexInstallPath() android.InstallPath }); ok {
++				location := android.InstallPathToOnDevicePath(ctx, lib.DexInstallPath())
++				if strings.HasPrefix(location, "/system/product/") || strings.HasPrefix(location, "/system/system_ext/") {
++					location = strings.TrimPrefix(location, "/system")
++				}
++				locations[ctx.OtherModuleName(m)] = location
++			}
++		})
++	}
++	return locations
++}
++
+ // enforceUsesLibraries returns true of <uses-library> tags should be checked against uses_libs and optional_uses_libs
+ // properties.  Defaults to true if either of uses_libs or optional_uses_libs is specified.  Will default to true
+ // unconditionally in the future.
+diff --git a/java/dexpreopt.go b/java/dexpreopt.go
+index 28a2c8a..cacbf87 100644
+--- a/java/dexpreopt.go
++++ b/java/dexpreopt.go
+@@ -38,6 +38,7 @@ type dexpreopter struct {
+ 	optionalUsesLibs []string
+ 	enforceUsesLibs  bool
+ 	libraryPaths     map[string]android.Path
++	libraryLocations map[string]string
+ 
+ 	builtInstalled string
+ }
+@@ -62,6 +63,11 @@ type DexpreoptProperties struct {
+ 	}
+ }
+ 
++// DexInstallPath exposes the real partition of an installable Java library.
++func (d *dexpreopter) DexInstallPath() android.InstallPath {
++	return d.installPath
++}
++
+ func init() {
+ 	dexpreopt.DexpreoptRunningInSoong = true
+ }
+@@ -198,6 +204,7 @@ func (d *dexpreopter) dexpreopt(ctx android.ModuleContext, dexJarFile android.Mo
+ 		PresentOptionalUsesLibraries: d.optionalUsesLibs,
+ 		UsesLibraries:                d.usesLibs,
+ 		LibraryPaths:                 d.libraryPaths,
++		LibraryLocations:             d.libraryLocations,
+ 
+ 		Archs:                   archs,
+ 		DexPreoptImages:         images,

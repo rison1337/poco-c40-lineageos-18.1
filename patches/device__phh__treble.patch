@@ -1,0 +1,1532 @@
+diff --git a/AndroidProducts.mk b/AndroidProducts.mk
+new file mode 100644
+index 0000000..f51f124
+--- /dev/null
++++ b/AndroidProducts.mk
+@@ -0,0 +1,50 @@
++PRODUCT_MAKEFILES := \
++	$(LOCAL_DIR)/lineage_arm64_avS.mk \
++	$(LOCAL_DIR)/lineage_arm64_avN.mk \
++	$(LOCAL_DIR)/lineage_arm_avS.mk \
++	$(LOCAL_DIR)/lineage_arm_avN.mk \
++	$(LOCAL_DIR)/lineage_a64_avS.mk \
++	$(LOCAL_DIR)/lineage_a64_avN.mk \
++	$(LOCAL_DIR)/lineage_arm64_agS.mk \
++	$(LOCAL_DIR)/lineage_arm64_agN.mk \
++	$(LOCAL_DIR)/lineage_arm_agS.mk \
++	$(LOCAL_DIR)/lineage_arm_agN.mk \
++	$(LOCAL_DIR)/lineage_a64_agS.mk \
++	$(LOCAL_DIR)/lineage_a64_agN.mk \
++	$(LOCAL_DIR)/lineage_arm64_afS.mk \
++	$(LOCAL_DIR)/lineage_arm64_afN.mk \
++	$(LOCAL_DIR)/lineage_arm_afS.mk \
++	$(LOCAL_DIR)/lineage_arm_afN.mk \
++	$(LOCAL_DIR)/lineage_a64_afS.mk \
++	$(LOCAL_DIR)/lineage_a64_afN.mk \
++	$(LOCAL_DIR)/lineage_arm64_aoS.mk \
++	$(LOCAL_DIR)/lineage_arm64_aoN.mk \
++	$(LOCAL_DIR)/lineage_arm_aoS.mk \
++	$(LOCAL_DIR)/lineage_arm_aoN.mk \
++	$(LOCAL_DIR)/lineage_a64_aoS.mk \
++	$(LOCAL_DIR)/lineage_a64_aoN.mk \
++	$(LOCAL_DIR)/lineage_arm64_bvS.mk \
++	$(LOCAL_DIR)/lineage_arm64_bvN.mk \
++	$(LOCAL_DIR)/lineage_arm_bvS.mk \
++	$(LOCAL_DIR)/lineage_arm_bvN.mk \
++	$(LOCAL_DIR)/lineage_a64_bvS.mk \
++	$(LOCAL_DIR)/lineage_a64_bvN.mk \
++	$(LOCAL_DIR)/lineage_arm64_bgS.mk \
++	$(LOCAL_DIR)/lineage_arm64_bgN.mk \
++	$(LOCAL_DIR)/lineage_arm_bgS.mk \
++	$(LOCAL_DIR)/lineage_arm_bgN.mk \
++	$(LOCAL_DIR)/lineage_a64_bgS.mk \
++	$(LOCAL_DIR)/lineage_a64_bgN.mk \
++	$(LOCAL_DIR)/lineage_arm64_bfS.mk \
++	$(LOCAL_DIR)/lineage_arm64_bfN.mk \
++	$(LOCAL_DIR)/lineage_arm_bfS.mk \
++	$(LOCAL_DIR)/lineage_arm_bfN.mk \
++	$(LOCAL_DIR)/lineage_a64_bfS.mk \
++	$(LOCAL_DIR)/lineage_a64_bfN.mk \
++	$(LOCAL_DIR)/lineage_arm64_boS.mk \
++	$(LOCAL_DIR)/lineage_arm64_boN.mk \
++	$(LOCAL_DIR)/lineage_arm_boS.mk \
++	$(LOCAL_DIR)/lineage_arm_boN.mk \
++	$(LOCAL_DIR)/lineage_a64_boS.mk \
++	$(LOCAL_DIR)/lineage_a64_boN.mk \
++
+diff --git a/base-pre.mk b/base-pre.mk
+index 6a317e4..e69de29 100644
+--- a/base-pre.mk
++++ b/base-pre.mk
+@@ -1,3 +0,0 @@
+-#Use a more decent APN config
+-PRODUCT_COPY_FILES += \
+-	device/sample/etc/apns-full-conf.xml:system/etc/apns-conf.xml
+diff --git a/base.mk b/base.mk
+index 301fee9..d00e889 100644
+--- a/base.mk
++++ b/base.mk
+@@ -8,12 +8,14 @@ PRODUCT_COPY_FILES := \
+ 	frameworks/native/data/etc/android.hardware.bluetooth_le.xml:system/etc/permissions/android.hardware.bluetooth_le.xml \
+ 	frameworks/native/data/etc/android.hardware.usb.host.xml:system/etc/permissions/android.hardware.usb.host.xml \
+ 
+-#Use a more decent APN config
+-PRODUCT_COPY_FILES += \
+-	device/sample/etc/apns-full-conf.xml:system/etc/apns-conf.xml
+-
+ BOARD_PLAT_PRIVATE_SEPOLICY_DIR += device/phh/treble/sepolicy
+-PRODUCT_PACKAGE_OVERLAYS += device/phh/treble/overlay
++
++PRODUCT_PACKAGE_OVERLAYS += \
++	device/phh/treble/overlay \
++	device/phh/treble/overlay-lineage
++
++PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += \
++	device/phh/treble/overlay-lineage/lineage-sdk
+ 
+ $(call inherit-product, vendor/hardware_overlay/overlay.mk)
+ $(call inherit-product, $(SRC_TARGET_DIR)/product/core_64_bit.mk)
+@@ -28,13 +30,13 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+ 	ro.build.version.all_codenames=$(PLATFORM_VERSION_ALL_CODENAMES) \
+ 	ro.build.version.release=$(PLATFORM_VERSION) \
+ 	ro.build.version.security_patch=$(PLATFORM_SECURITY_PATCH) \
+-	ro.adb.secure=0 \
++	ro.adb.secure=1 \
+ 	ro.logd.auditd=true
+-	
++
+ #Huawei HiSuite (also other OEM custom programs I guess) it's of no use in AOSP builds
+ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+ 	persist.sys.usb.config=adb \
+-	ro.cust.cdrom=/dev/null	
++	ro.cust.cdrom=/dev/null
+ 
+ #VNDK config files
+ PRODUCT_COPY_FILES += \
+diff --git a/board-base.mk b/board-base.mk
+index 0da1061..e270068 100644
+--- a/board-base.mk
++++ b/board-base.mk
+@@ -4,3 +4,4 @@ TARGET_EXFAT_DRIVER := exfat
+ DEVICE_FRAMEWORK_MANIFEST_FILE := device/phh/treble/framework_manifest.xml
+ 
+ BOARD_ROOT_EXTRA_FOLDERS += bt_firmware sec_storage efs
++BOARD_EXT4_SHARE_DUP_BLOCKS := true
+diff --git a/generate.sh b/generate.sh
+index 659737d..15c5571 100644
+--- a/generate.sh
++++ b/generate.sh
+@@ -64,7 +64,7 @@ for part in a ab;do
+ 					optional_base='$(call inherit-product, device/phh/treble/base-sas.mk)'
+ 				fi
+ 
+-				target="treble_${arch}_${part_suffix}${apps_suffix}${su_suffix}"
++				target="lineage_${arch}_${part_suffix}${apps_suffix}${su_suffix}"
+ 
+ 				baseArch="$arch"
+ 				if [ "$arch" = "a64" ];then
+diff --git a/lineage_a64_afN.mk b/lineage_a64_afN.mk
+new file mode 100644
+index 0000000..bda5406
+--- /dev/null
++++ b/lineage_a64_afN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, vendor/foss/foss.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_afN
++PRODUCT_DEVICE := phhgsi_a64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with FOSS apps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_a64_afS.mk b/lineage_a64_afS.mk
+new file mode 100644
+index 0000000..e748f94
+--- /dev/null
++++ b/lineage_a64_afS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, vendor/foss/foss.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_afS
++PRODUCT_DEVICE := phhgsi_a64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with FOSS apps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_a64_agN.mk b/lineage_a64_agN.mk
+new file mode 100644
+index 0000000..203e88a
+--- /dev/null
++++ b/lineage_a64_agN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, device/phh/treble/gapps.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_agN
++PRODUCT_DEVICE := phhgsi_a64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with GApps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_a64_agS.mk b/lineage_a64_agS.mk
+new file mode 100644
+index 0000000..e75f07b
+--- /dev/null
++++ b/lineage_a64_agS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, device/phh/treble/gapps.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_agS
++PRODUCT_DEVICE := phhgsi_a64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with GApps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_a64_aoN.mk b/lineage_a64_aoN.mk
+new file mode 100644
+index 0000000..c6c6c8a
+--- /dev/null
++++ b/lineage_a64_aoN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, device/phh/treble/gapps-go.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_aoN
++PRODUCT_DEVICE := phhgsi_a64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble Go
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_a64_aoS.mk b/lineage_a64_aoS.mk
+new file mode 100644
+index 0000000..31d71ff
+--- /dev/null
++++ b/lineage_a64_aoS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, device/phh/treble/gapps-go.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_aoS
++PRODUCT_DEVICE := phhgsi_a64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble Go
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_a64_avN.mk b/lineage_a64_avN.mk
+new file mode 100644
+index 0000000..3aa8d7b
+--- /dev/null
++++ b/lineage_a64_avN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_avN
++PRODUCT_DEVICE := phhgsi_a64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble vanilla
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_a64_avS.mk b/lineage_a64_avS.mk
+new file mode 100644
+index 0000000..4789ae9
+--- /dev/null
++++ b/lineage_a64_avS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_avS
++PRODUCT_DEVICE := phhgsi_a64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble vanilla
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_a64_bfN.mk b/lineage_a64_bfN.mk
+new file mode 100644
+index 0000000..887f1ba
+--- /dev/null
++++ b/lineage_a64_bfN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, vendor/foss/foss.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_bfN
++PRODUCT_DEVICE := phhgsi_a64_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with FOSS apps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_a64_bfS.mk b/lineage_a64_bfS.mk
+new file mode 100644
+index 0000000..ceecdbe
+--- /dev/null
++++ b/lineage_a64_bfS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, vendor/foss/foss.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_bfS
++PRODUCT_DEVICE := phhgsi_a64_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with FOSS apps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_a64_bgN.mk b/lineage_a64_bgN.mk
+new file mode 100644
+index 0000000..1eb93ac
+--- /dev/null
++++ b/lineage_a64_bgN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, device/phh/treble/gapps.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_bgN
++PRODUCT_DEVICE := phhgsi_a64_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with GApps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_a64_bgS.mk b/lineage_a64_bgS.mk
+new file mode 100644
+index 0000000..946ed20
+--- /dev/null
++++ b/lineage_a64_bgS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, device/phh/treble/gapps.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_bgS
++PRODUCT_DEVICE := phhgsi_a64_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with GApps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_a64_boN.mk b/lineage_a64_boN.mk
+new file mode 100644
+index 0000000..4a8d016
+--- /dev/null
++++ b/lineage_a64_boN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, device/phh/treble/gapps-go.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_boN
++PRODUCT_DEVICE := phhgsi_a64_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble Go
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_a64_boS.mk b/lineage_a64_boS.mk
+new file mode 100644
+index 0000000..c5587b0
+--- /dev/null
++++ b/lineage_a64_boS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, device/phh/treble/gapps-go.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_boS
++PRODUCT_DEVICE := phhgsi_a64_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble Go
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_a64_bvN.mk b/lineage_a64_bvN.mk
+new file mode 100644
+index 0000000..227dafd
+--- /dev/null
++++ b/lineage_a64_bvN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_bvN
++PRODUCT_DEVICE := phhgsi_a64_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble vanilla
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_a64_bvS.mk b/lineage_a64_bvS.mk
+new file mode 100644
+index 0000000..9b4d5ad
+--- /dev/null
++++ b/lineage_a64_bvS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_a64_bvS
++PRODUCT_DEVICE := phhgsi_a64_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble vanilla
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm64_afN.mk b/lineage_arm64_afN.mk
+new file mode 100644
+index 0000000..113b986
+--- /dev/null
++++ b/lineage_arm64_afN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, vendor/foss/foss.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_afN
++PRODUCT_DEVICE := phhgsi_arm64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with FOSS apps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_arm64_afS.mk b/lineage_arm64_afS.mk
+new file mode 100644
+index 0000000..fc1e585
+--- /dev/null
++++ b/lineage_arm64_afS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, vendor/foss/foss.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_afS
++PRODUCT_DEVICE := phhgsi_arm64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with FOSS apps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm64_agN.mk b/lineage_arm64_agN.mk
+new file mode 100644
+index 0000000..fc811b9
+--- /dev/null
++++ b/lineage_arm64_agN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, device/phh/treble/gapps.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_agN
++PRODUCT_DEVICE := phhgsi_arm64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with GApps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_arm64_agS.mk b/lineage_arm64_agS.mk
+new file mode 100644
+index 0000000..4d231e2
+--- /dev/null
++++ b/lineage_arm64_agS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, device/phh/treble/gapps.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_agS
++PRODUCT_DEVICE := phhgsi_arm64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with GApps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm64_aoN.mk b/lineage_arm64_aoN.mk
+new file mode 100644
+index 0000000..301185f
+--- /dev/null
++++ b/lineage_arm64_aoN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, device/phh/treble/gapps-go.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_aoN
++PRODUCT_DEVICE := phhgsi_arm64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble Go
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_arm64_aoS.mk b/lineage_arm64_aoS.mk
+new file mode 100644
+index 0000000..c59009b
+--- /dev/null
++++ b/lineage_arm64_aoS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, device/phh/treble/gapps-go.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_aoS
++PRODUCT_DEVICE := phhgsi_arm64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble Go
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm64_avN.mk b/lineage_arm64_avN.mk
+new file mode 100644
+index 0000000..362598d
+--- /dev/null
++++ b/lineage_arm64_avN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_avN
++PRODUCT_DEVICE := phhgsi_arm64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble vanilla
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_arm64_avS.mk b/lineage_arm64_avS.mk
+new file mode 100644
+index 0000000..2956486
+--- /dev/null
++++ b/lineage_arm64_avS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_avS
++PRODUCT_DEVICE := phhgsi_arm64_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble vanilla
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm64_bfN.mk b/lineage_arm64_bfN.mk
+new file mode 100644
+index 0000000..a68e9af
+--- /dev/null
++++ b/lineage_arm64_bfN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, vendor/foss/foss.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_bfN
++PRODUCT_DEVICE := phhgsi_arm64_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with FOSS apps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_arm64_bfS.mk b/lineage_arm64_bfS.mk
+new file mode 100644
+index 0000000..42b2f7e
+--- /dev/null
++++ b/lineage_arm64_bfS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, vendor/foss/foss.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_bfS
++PRODUCT_DEVICE := phhgsi_arm64_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with FOSS apps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm64_bgN.mk b/lineage_arm64_bgN.mk
+new file mode 100644
+index 0000000..a77ac08
+--- /dev/null
++++ b/lineage_arm64_bgN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, device/phh/treble/gapps.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_bgN
++PRODUCT_DEVICE := phhgsi_arm64_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with GApps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_arm64_bgS.mk b/lineage_arm64_bgS.mk
+new file mode 100644
+index 0000000..de08482
+--- /dev/null
++++ b/lineage_arm64_bgS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, device/phh/treble/gapps.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_bgS
++PRODUCT_DEVICE := phhgsi_arm64_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with GApps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm64_boN.mk b/lineage_arm64_boN.mk
+new file mode 100644
+index 0000000..c17cc9e
+--- /dev/null
++++ b/lineage_arm64_boN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, device/phh/treble/gapps-go.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_boN
++PRODUCT_DEVICE := phhgsi_arm64_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble Go
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_arm64_boS.mk b/lineage_arm64_boS.mk
+new file mode 100644
+index 0000000..8ef8e0a
+--- /dev/null
++++ b/lineage_arm64_boS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, device/phh/treble/gapps-go.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_boS
++PRODUCT_DEVICE := phhgsi_arm64_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble Go
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm64_bvN.mk b/lineage_arm64_bvN.mk
+new file mode 100644
+index 0000000..47998b2
+--- /dev/null
++++ b/lineage_arm64_bvN.mk
+@@ -0,0 +1,33 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_bvN
++PRODUCT_DEVICE := phhgsi_arm64_ab
++PRODUCT_BRAND := POCO
++PRODUCT_SYSTEM_BRAND := POCO
++PRODUCT_MODEL := POCO C40
++PRODUCT_SYSTEM_MODEL := POCO C40
++PRODUCT_SYSTEM_DEVICE := frost
++PRODUCT_MANUFACTURER := Xiaomi
++PRODUCT_SYSTEM_MANUFACTURER := Xiaomi
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
++
++# Local POCO C40 configuration, enabled only on frost at runtime.
++PRODUCT_PACKAGES += treble-overlay-xiaomi-pococ40
++PRODUCT_PACKAGES += C40T2CarrierConfigOverlay
++PRODUCT_PACKAGES += C40SystemUICompatOverlay
++# This device-only regression APK must not create an overlay in the ROM.
++PRODUCT_ENFORCE_RRO_EXEMPTED_TARGETS += C40VolumeControllerTests
++$(call inherit-product, vendor/xiaomi/frost-ims/frost.mk)
++$(call inherit-product, vendor/xiaomi/frost-fm/frost.mk)
++$(call inherit-product, vendor/xiaomi/frost-signing/signing.mk)
+diff --git a/lineage_arm64_bvS.mk b/lineage_arm64_bvS.mk
+new file mode 100644
+index 0000000..6903870
+--- /dev/null
++++ b/lineage_arm64_bvS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm64
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm64_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm64_bvS
++PRODUCT_DEVICE := phhgsi_arm64_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble vanilla
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm_afN.mk b/lineage_arm_afN.mk
+new file mode 100644
+index 0000000..e07329a
+--- /dev/null
++++ b/lineage_arm_afN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, vendor/foss/foss.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_afN
++PRODUCT_DEVICE := phhgsi_arm_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with FOSS apps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_arm_afS.mk b/lineage_arm_afS.mk
+new file mode 100644
+index 0000000..fae8fed
+--- /dev/null
++++ b/lineage_arm_afS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, vendor/foss/foss.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_afS
++PRODUCT_DEVICE := phhgsi_arm_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with FOSS apps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm_agN.mk b/lineage_arm_agN.mk
+new file mode 100644
+index 0000000..e7489e9
+--- /dev/null
++++ b/lineage_arm_agN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, device/phh/treble/gapps.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_agN
++PRODUCT_DEVICE := phhgsi_arm_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with GApps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_arm_agS.mk b/lineage_arm_agS.mk
+new file mode 100644
+index 0000000..a6aa467
+--- /dev/null
++++ b/lineage_arm_agS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, device/phh/treble/gapps.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_agS
++PRODUCT_DEVICE := phhgsi_arm_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with GApps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm_aoN.mk b/lineage_arm_aoN.mk
+new file mode 100644
+index 0000000..1c66128
+--- /dev/null
++++ b/lineage_arm_aoN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, device/phh/treble/gapps-go.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_aoN
++PRODUCT_DEVICE := phhgsi_arm_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble Go
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_arm_aoS.mk b/lineage_arm_aoS.mk
+new file mode 100644
+index 0000000..97235d8
+--- /dev/null
++++ b/lineage_arm_aoS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++$(call inherit-product, device/phh/treble/gapps-go.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_aoS
++PRODUCT_DEVICE := phhgsi_arm_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble Go
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm_avN.mk b/lineage_arm_avN.mk
+new file mode 100644
+index 0000000..877dfcd
+--- /dev/null
++++ b/lineage_arm_avN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_avN
++PRODUCT_DEVICE := phhgsi_arm_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble vanilla
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_arm_avS.mk b/lineage_arm_avS.mk
+new file mode 100644
+index 0000000..aa2cb13
+--- /dev/null
++++ b/lineage_arm_avS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++$(call inherit-product, device/phh/treble/base-sas.mk)
++
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_avS
++PRODUCT_DEVICE := phhgsi_arm_a
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble vanilla
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm_bfN.mk b/lineage_arm_bfN.mk
+new file mode 100644
+index 0000000..583001e
+--- /dev/null
++++ b/lineage_arm_bfN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, vendor/foss/foss.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_bfN
++PRODUCT_DEVICE := phhgsi_arm_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with FOSS apps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_arm_bfS.mk b/lineage_arm_bfS.mk
+new file mode 100644
+index 0000000..4077118
+--- /dev/null
++++ b/lineage_arm_bfS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, vendor/foss/foss.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_bfS
++PRODUCT_DEVICE := phhgsi_arm_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with FOSS apps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm_bgN.mk b/lineage_arm_bgN.mk
+new file mode 100644
+index 0000000..79d58b7
+--- /dev/null
++++ b/lineage_arm_bgN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, device/phh/treble/gapps.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_bgN
++PRODUCT_DEVICE := phhgsi_arm_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with GApps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_arm_bgS.mk b/lineage_arm_bgS.mk
+new file mode 100644
+index 0000000..4506fb3
+--- /dev/null
++++ b/lineage_arm_bgS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, device/phh/treble/gapps.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_bgS
++PRODUCT_DEVICE := phhgsi_arm_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble with GApps
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm_boN.mk b/lineage_arm_boN.mk
+new file mode 100644
+index 0000000..2db8b59
+--- /dev/null
++++ b/lineage_arm_boN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, device/phh/treble/gapps-go.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_boN
++PRODUCT_DEVICE := phhgsi_arm_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble Go
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_arm_boS.mk b/lineage_arm_boS.mk
+new file mode 100644
+index 0000000..6e1e6a2
+--- /dev/null
++++ b/lineage_arm_boS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++$(call inherit-product, device/phh/treble/gapps-go.mk)
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_boS
++PRODUCT_DEVICE := phhgsi_arm_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble Go
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/lineage_arm_bvN.mk b/lineage_arm_bvN.mk
+new file mode 100644
+index 0000000..851bd66
+--- /dev/null
++++ b/lineage_arm_bvN.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_bvN
++PRODUCT_DEVICE := phhgsi_arm_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble vanilla
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES += 
++
+diff --git a/lineage_arm_bvS.mk b/lineage_arm_bvS.mk
+new file mode 100644
+index 0000000..ee69b7f
+--- /dev/null
++++ b/lineage_arm_bvS.mk
+@@ -0,0 +1,19 @@
++TARGET_GAPPS_ARCH := arm
++$(call inherit-product, device/phh/treble/base-pre.mk)
++include build/make/target/product/aosp_arm_ab.mk
++$(call inherit-product, device/phh/treble/base.mk)
++
++
++$(call inherit-product, device/phh/treble/lineage.mk)
++
++PRODUCT_NAME := lineage_arm_bvS
++PRODUCT_DEVICE := phhgsi_arm_ab
++PRODUCT_BRAND := Phh
++PRODUCT_SYSTEM_BRAND := Phh
++PRODUCT_MODEL := Phh-Treble vanilla
++
++# Overwrite the inherited "emulator" characteristics
++PRODUCT_CHARACTERISTICS := device
++
++PRODUCT_PACKAGES +=  phh-su me.phh.superuser
++
+diff --git a/overlay-lineage/lineage-sdk/lineage/res/res/values/config.xml b/overlay-lineage/lineage-sdk/lineage/res/res/values/config.xml
+new file mode 100644
+index 0000000..8df673a
+--- /dev/null
++++ b/overlay-lineage/lineage-sdk/lineage/res/res/values/config.xml
+@@ -0,0 +1,81 @@
++<?xml version="1.0" encoding="utf-8"?>
++<!--
++     Copyright (C) 2015-2016 The CyanogenMod Project
++                   2017-2018 The LineageOS Project
++
++     Licensed under the Apache License, Version 2.0 (the "License");
++     you may not use this file except in compliance with the License.
++     You may obtain a copy of the License at
++          http://www.apache.org/licenses/LICENSE-2.0
++     Unless required by applicable law or agreed to in writing, software
++     distributed under the License is distributed on an "AS IS" BASIS,
++     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++     See the License for the specific language governing permissions and
++     limitations under the License.
++-->
++<resources>
++    <!-- Whether device has screen with higher aspect ratio -->
++    <bool name="config_haveHigherAspectRatioScreen">true</bool>
++
++    <!-- All the capabilities of the LEDs on this device, stored as a bit field.
++         This integer should equal the sum of the corresponding value for each
++         of the following capabilities present:
++         // Device has a color adjustable battery light.
++         LIGHTS_RGB_NOTIFICATION_LED = 1
++         // Device has a color adjustable notification light.
++         LIGHTS_RGB_BATTERY_LED = 2
++         LIGHTS_MULTIPLE_NOTIFICATION_LED = 4 (deprecated)
++         // The notification light has adjustable pulsing capability.
++         LIGHTS_PULSATING_LED = 8
++         // Device has a multi-segment battery light that is able to
++         // use the light brightness value to determine how many
++         // segments to show (in order to represent battery level).
++         LIGHTS_SEGMENTED_BATTERY_LED = 16
++         // The notification light supports HAL adjustable brightness
++         // via the alpha channel.
++         // Note: if a device notification light supports LIGHTS_RGB_NOTIFICATION_LED
++         // then HAL support is not necessary for brightness control.  In this case,
++         // brightness support will be provided by lineage-sdk through the scaling of
++         // RGB color values.
++         LIGHTS_ADJUSTABLE_NOTIFICATION_LED_BRIGHTNESS = 32
++         // Device has a battery light.
++         LIGHTS_BATTERY_LED = 64
++         // The battery light supports HAL adjustable brightness via
++         // the alpha channel.
++         // Note: if a device battery light supports LIGHTS_RGB_BATTERY_LED then HAL
++         // support is not necessary for brightness control.  In this case,
++         // brightness support will be provided by lineage-sdk through the scaling of
++         // RGB color values.
++         LIGHTS_ADJUSTABLE_BATTERY_LED_BRIGHTNESS = 128
++         For example, a device with notification and battery lights that supports
++         pulsating and RGB control would set this config to 75. -->
++    <integer name="config_deviceLightCapabilities">255</integer>
++
++    <!-- Hardware keys present on the device, stored as a bit field.
++         This integer should equal the sum of the corresponding value for each
++         of the following keys present:
++             1 - Home
++             2 - Back
++             4 - Menu
++             8 - Assistant (search)
++            16 - App switch
++            32 - Camera
++            64 - Volume rocker
++         For example, a device with Home, Back and Menu keys would set this
++         config to 7. -->
++    <integer name="config_deviceHardwareKeys">127</integer>
++
++    <!-- Hardware keys present on the device with the ability to wake, stored as a bit field.
++         This integer should equal the sum of the corresponding value for each
++         of the following keys present:
++             1 - Home
++             2 - Back
++             4 - Menu
++             8 - Assistant (search)
++            16 - App switch
++            32 - Camera
++            64 - Volume rocker
++         For example, a device with Home, Back and Menu keys would set this
++         config to 7. -->
++    <integer name="config_deviceHardwareWakeKeys">127</integer>
++</resources>
+diff --git a/overlay/frameworks/base/core/res/res/values/config.xml b/overlay/frameworks/base/core/res/res/values/config.xml
+index 2d5c21e..7a15163 100644
+--- a/overlay/frameworks/base/core/res/res/values/config.xml
++++ b/overlay/frameworks/base/core/res/res/values/config.xml
+@@ -22,7 +22,6 @@
+ 	<string name="config_icon_mask" translatable="false">"M50 0C77.6 0 100 22.4 100 50C100 77.6 77.6 100 50 100C22.4 100 0 77.6 0 50C0 22.4 22.4 0 50 0Z"</string>
+ 	<bool name="config_useRoundIcon">true</bool>
+ 
+-	<string name="config_wallpaperCropperPackage">com.android.wallpaperpicker</string>
+ 	<bool name="config_unplugTurnsOnScreen">true</bool>
+ 	<integer name="config_multiuserMaximumUsers">5</integer>
+ 	<bool name="config_enableMultiUserUI">true</bool>
+diff --git a/rw-system.sh b/rw-system.sh
+index d27e8d4..5e120de 100644
+--- a/rw-system.sh
++++ b/rw-system.sh
+@@ -59,8 +59,15 @@ if [ "$vndk" = 26 ];then
+ 	resetprop_phh ro.vndk.version 26
+ fi
+ 
+-setprop sys.usb.ffs.aio_compat true
+-setprop persist.adb.nonblocking_ffs false
++# frost's stock DWC2 kernel panics on some short synchronous FFS reads.
++# Keep the normal Android 11 aligned asynchronous transport on this device.
++if [ "$(getprop ro.product.vendor.device)" = frost ]; then
++    setprop sys.usb.ffs.aio_compat false
++    setprop persist.adb.nonblocking_ffs true
++else
++    setprop sys.usb.ffs.aio_compat true
++    setprop persist.adb.nonblocking_ffs false
++fi
+ 
+ fixSPL() {
+     if [ "$(getprop ro.product.cpu.abi)" = "armeabi-v7a" ]; then
+@@ -301,6 +308,38 @@ done
+ mkdir -p /mnt/phh/
+ mount -t tmpfs -o rw,nodev,relatime,mode=755,gid=0 none /mnt/phh || true
+ mkdir /mnt/phh/empty_dir
++
++# BEGIN C40 sensor flush accounting
++# Wake-up flush metadata has header.sensor=0. Classify its drain by per-sensor
++# ring handle, as the stock writer already does. Apply only to the exact blob.
++if [ "$(getprop ro.product.vendor.device)" = frost ] &&
++   [ "$(sha256sum /vendor/lib64/libhubconnection.so | cut -d ' ' -f 1)" = a18bb56643d952a8f61460c27158a6ffd1db9baa8be8a73820bc1856b50cd601 ] &&
++   [ "$(sha256sum /system/etc/c40-sensors/libhubconnection-flush-fixed.so | cut -d ' ' -f 1)" = 63713863dbbf290fc7f39582617adea5bebb75bd63fe6392867c2581e62aad9d ]; then
++    if cp /system/etc/c40-sensors/libhubconnection-flush-fixed.so /mnt/phh/c40-sensors-hub.so &&
++       chmod 0644 /mnt/phh/c40-sensors-hub.so &&
++       chcon u:object_r:vendor_file:s0 /mnt/phh/c40-sensors-hub.so &&
++       [ "$(sha256sum /mnt/phh/c40-sensors-hub.so | cut -d ' ' -f 1)" = 63713863dbbf290fc7f39582617adea5bebb75bd63fe6392867c2581e62aad9d ] &&
++       mount -o bind /mnt/phh/c40-sensors-hub.so /vendor/lib64/libhubconnection.so; then
++        log -t c40-sensors 'Wake-up flush accounting correction mounted'
++        if [ "$(getprop init.svc.vendor.sensors-hal-2-1)" = running ]; then
++            setprop ctl.restart vendor.sensors-hal-2-1
++        fi
++    fi
++fi
++# END C40 sensor flush accounting
++
++# Stock frost's policy selects the QTI-private session API, while Lineage's
++# Bluetooth stack starts android.hardware.bluetooth.audio@2.0 sessions.
++# The vendor already supplies audio.bluetooth.default with that standard API.
++if [ "$(getprop ro.product.vendor.device)" = frost ] &&
++   [ -f /vendor/etc/bluetooth_qti_audio_policy_configuration.xml ] &&
++   [ -f /vendor/lib/hw/audio.bluetooth.default.so ]; then
++    cp /vendor/etc/bluetooth_qti_audio_policy_configuration.xml /mnt/phh/c40-bluetooth-policy.xml
++    sed -i 's/name="bluetooth_qti"/name="bluetooth"/' /mnt/phh/c40-bluetooth-policy.xml
++    chmod 0644 /mnt/phh/c40-bluetooth-policy.xml
++    chcon u:object_r:vendor_configs_file:s0 /mnt/phh/c40-bluetooth-policy.xml
++    mount -o bind /mnt/phh/c40-bluetooth-policy.xml /vendor/etc/bluetooth_qti_audio_policy_configuration.xml
++fi
+ fixSPL
+ 
+ changeKeylayout
+diff --git a/sepolicy/file_contexts b/sepolicy/file_contexts
+index 4ae5095..5e39d5b 100644
+--- a/sepolicy/file_contexts
++++ b/sepolicy/file_contexts
+@@ -6,9 +6,6 @@
+ /system/bin/phh-on-data.sh u:object_r:phhsu_exec:s0
+ /system/bin/asus-motor u:object_r:phhsu_exec:s0
+ 
+-#/system/bin/fsck\.exfat                 u:object_r:fsck_exec:s0
+-/system/bin/fsck\.ntfs                  u:object_r:fsck_exec:s0
+-
+ /bt_firmware(/.*)?      u:object_r:bt_firmware_file:s0
+ 
+ /sec_storage(/.*)?      u:object_r:teecd_data_file:s0
+diff --git a/sepolicy/gsicharger.te b/sepolicy/gsicharger.te
+new file mode 100644
+index 0000000..91cfb5c
+--- /dev/null
++++ b/sepolicy/gsicharger.te
+@@ -0,0 +1 @@
++permissive charger;
+diff --git a/system.prop b/system.prop
+index 3dbe6df..98bdbb5 100644
+--- a/system.prop
++++ b/system.prop
+@@ -1,4 +1,4 @@
+-ro.adb.secure=0
++ro.adb.secure=1
+ #Some devices have sdcardfs kernel panicing on 8.0
+ #Disable for everyone for the moment
+ ro.sys.sdcardfs=0

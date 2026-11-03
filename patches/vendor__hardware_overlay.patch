@@ -1,0 +1,138 @@
+diff --git a/Xiaomi/PocoC40/Android.mk b/Xiaomi/PocoC40/Android.mk
+new file mode 100644
+index 0000000..c52715a
+--- /dev/null
++++ b/Xiaomi/PocoC40/Android.mk
+@@ -0,0 +1,8 @@
++LOCAL_PATH := $(call my-dir)
++include $(CLEAR_VARS)
++LOCAL_MODULE_TAGS := optional
++LOCAL_PACKAGE_NAME := treble-overlay-xiaomi-pococ40
++LOCAL_MODULE_PATH := $(TARGET_OUT_PRODUCT)/overlay
++LOCAL_IS_RUNTIME_RESOURCE_OVERLAY := true
++LOCAL_PRIVATE_PLATFORM_APIS := true
++include $(BUILD_PACKAGE)
+diff --git a/Xiaomi/PocoC40/AndroidManifest.xml b/Xiaomi/PocoC40/AndroidManifest.xml
+new file mode 100644
+index 0000000..77c08db
+--- /dev/null
++++ b/Xiaomi/PocoC40/AndroidManifest.xml
+@@ -0,0 +1,10 @@
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="me.phh.treble.overlay.xiaomi.pococ40"
++    android:versionCode="1"
++    android:versionName="1.0">
++    <overlay android:targetPackage="android"
++        android:requiredSystemPropertyName="ro.product.vendor.device"
++        android:requiredSystemPropertyValue="frost"
++        android:priority="350"
++        android:isStatic="true" />
++</manifest>
+diff --git a/Xiaomi/PocoC40/res/values/config.xml b/Xiaomi/PocoC40/res/values/config.xml
+new file mode 100644
+index 0000000..0a28f65
+--- /dev/null
++++ b/Xiaomi/PocoC40/res/values/config.xml
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Read on the actual frost RU V13.0.17.0, 720x1650 / density 320.
++         Values and query results: stock-framework-resource-values.json. -->
++    <string name="config_mainBuiltInDisplayCutout" translatable="false">M 0,0 H -40 V 49 H 40 V 0 H 0 Z</string>
++    <dimen name="status_bar_height_portrait">49px</dimen>
++    <bool name="config_showNavigationBar">true</bool>
++    <bool name="config_powerDecoupleInteractiveModeFromDisplay">false</bool>
++    <bool name="config_powerDecoupleAutoSuspendModeFromDisplay">true</bool>
++    <bool name="config_enableAutoPowerModes">true</bool>
++    <!-- IMS capabilities measured on stock; carrier provisioning remains required. -->
++    <bool name="config_device_volte_available">true</bool>
++    <bool name="config_device_vt_available">true</bool>
++    <bool name="config_device_wfc_ims_available">true</bool>
++</resources>
+diff --git a/Xiaomi/PocoC40Carrier/Android.mk b/Xiaomi/PocoC40Carrier/Android.mk
+new file mode 100644
+index 0000000..c392c0f
+--- /dev/null
++++ b/Xiaomi/PocoC40Carrier/Android.mk
+@@ -0,0 +1,9 @@
++LOCAL_PATH := $(call my-dir)
++include $(CLEAR_VARS)
++LOCAL_MODULE_TAGS := optional
++LOCAL_PACKAGE_NAME := C40T2CarrierConfigOverlay
++LOCAL_MODULE_PATH := $(TARGET_OUT_PRODUCT)/overlay
++LOCAL_IS_RUNTIME_RESOURCE_OVERLAY := true
++LOCAL_PRIVATE_PLATFORM_APIS := true
++LOCAL_CERTIFICATE := platform
++include $(BUILD_PACKAGE)
+diff --git a/Xiaomi/PocoC40Carrier/AndroidManifest.xml b/Xiaomi/PocoC40Carrier/AndroidManifest.xml
+new file mode 100644
+index 0000000..11f7871
+--- /dev/null
++++ b/Xiaomi/PocoC40Carrier/AndroidManifest.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="org.c40.carrierconfig.t2" android:versionCode="1">
++    <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="30" />
++    <overlay android:targetPackage="com.android.carrierconfig"
++        android:isStatic="true" android:priority="999"
++        android:requiredSystemPropertyName="ro.product.vendor.device"
++        android:requiredSystemPropertyValue="frost" />
++    <application android:hasCode="false" />
++</manifest>
+diff --git a/Xiaomi/PocoC40Carrier/res/xml/vendor.xml b/Xiaomi/PocoC40Carrier/res/xml/vendor.xml
+new file mode 100644
+index 0000000..77ebc44
+--- /dev/null
++++ b/Xiaomi/PocoC40Carrier/res/xml/vendor.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<carrier_config_list>
++    <!-- Actual frost/t2 SIM registered IMS when this sole key was enabled. -->
++    <carrier_config mcc="250" mnc="20">
++        <boolean name="carrier_volte_available_bool" value="true" />
++    </carrier_config>
++</carrier_config_list>
+diff --git a/Xiaomi/PocoC40SystemUI/Android.mk b/Xiaomi/PocoC40SystemUI/Android.mk
+new file mode 100644
+index 0000000..930ba05
+--- /dev/null
++++ b/Xiaomi/PocoC40SystemUI/Android.mk
+@@ -0,0 +1,9 @@
++LOCAL_PATH := $(call my-dir)
++include $(CLEAR_VARS)
++LOCAL_MODULE_TAGS := optional
++LOCAL_PACKAGE_NAME := C40SystemUICompatOverlay
++LOCAL_MODULE_PATH := $(TARGET_OUT_PRODUCT)/overlay
++LOCAL_IS_RUNTIME_RESOURCE_OVERLAY := true
++LOCAL_PRIVATE_PLATFORM_APIS := true
++LOCAL_CERTIFICATE := platform
++include $(BUILD_PACKAGE)
+diff --git a/Xiaomi/PocoC40SystemUI/AndroidManifest.xml b/Xiaomi/PocoC40SystemUI/AndroidManifest.xml
+new file mode 100644
+index 0000000..14dc6f8
+--- /dev/null
++++ b/Xiaomi/PocoC40SystemUI/AndroidManifest.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="org.c40.systemui.compat" android:versionCode="1">
++    <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="30" />
++    <overlay android:targetPackage="com.android.systemui"
++        android:isStatic="true" android:priority="999"
++        android:requiredSystemPropertyName="ro.product.vendor.device"
++        android:requiredSystemPropertyValue="frost" />
++    <application android:hasCode="false" />
++</manifest>
+diff --git a/Xiaomi/PocoC40SystemUI/res/values/dimens.xml b/Xiaomi/PocoC40SystemUI/res/values/dimens.xml
+new file mode 100644
+index 0000000..8d1e5b5
+--- /dev/null
++++ b/Xiaomi/PocoC40SystemUI/res/values/dimens.xml
+@@ -0,0 +1,6 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Match NotificationIconAreaController's framework slot, not the MIUI
++         vendor overlay's 11.92dp denominator which enlarges Lineage icons. -->
++    <dimen name="status_bar_icon_size">22dp</dimen>
++</resources>

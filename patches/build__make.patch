@@ -1,0 +1,69 @@
+diff --git a/core/board_config.mk b/core/board_config.mk
+index 86162b6..d152bdf 100644
+--- a/core/board_config.mk
++++ b/core/board_config.mk
+@@ -113,6 +113,7 @@ endif
+ # ###############################################################
+ $(foreach v,$(_build_broken_var_list),$(eval $(v) :=))
+ BUILD_BROKEN_NINJA_USES_ENV_VARS :=
++BUILD_BROKEN_USES_BUILD_COPY_HEADERS := true
+ 
+ # Boards may be defined under $(SRC_TARGET_DIR)/board/$(TARGET_DEVICE)
+ # or under vendor/*/$(TARGET_DEVICE).  Search in both places, but
+diff --git a/target/board/gsi_system_ext.prop b/target/board/gsi_system_ext.prop
+index f085b61..566d94f 100644
+--- a/target/board/gsi_system_ext.prop
++++ b/target/board/gsi_system_ext.prop
+@@ -1,8 +1,8 @@
+ # GSI always generate dex pre-opt in system image
+ ro.cp_system_other_odex=0
+ 
+-# GSI always disables adb authentication
+-ro.adb.secure=0
++# Personal GSI requires authorized ADB host keys
++ro.adb.secure=1
+ 
+ # GSI disables non-AOSP nnapi extensions on product partition
+ ro.nnapi.extensions.deny_on_product=true
+diff --git a/target/product/mainline_system.mk b/target/product/mainline_system.mk
+index e9f9dde..4653207 100644
+--- a/target/product/mainline_system.mk
++++ b/target/product/mainline_system.mk
+@@ -39,9 +39,6 @@ PRODUCT_PACKAGES += \
+     Tag \
+     TimeZoneUpdater \
+ 
+-# Binaries
+-PRODUCT_PACKAGES += llkd
+-
+ # OTA support
+ PRODUCT_PACKAGES += \
+     recovery-refresh \
+@@ -49,10 +46,12 @@ PRODUCT_PACKAGES += \
+     update_verifier \
+ 
+ # Wrapped net utils for /vendor access.
+-PRODUCT_PACKAGES += netutils-wrapper-1.0
++PRODUCT_PACKAGES += \
++    netutils-wrapper-1.0 \
+ 
+ # Charger images
+-PRODUCT_PACKAGES += charger_res_images
++PRODUCT_PACKAGES += \
++    charger_res_images \
+ 
+ # system_other support
+ PRODUCT_PACKAGES += \
+@@ -135,12 +134,6 @@ _base_mk_allowed_list :=
+ 
+ _my_allowed_list := $(_base_mk_allowed_list)
+ 
+-# vendor.lineage.power@1.0 currently violates the artifact path requirements
+-# Exclude it from the check for now
+-_my_allowed_list += \
+-  $(TARGET_COPY_OUT_SYSTEM_EXT)/lib/vendor.lineage.power@1.0.so \
+-  $(TARGET_COPY_OUT_SYSTEM_EXT)/lib64/vendor.lineage.power@1.0.so \
+-
+ # For mainline, system.img should be mounted at /, so we include ROOT here.
+ _my_paths := \
+   $(TARGET_COPY_OUT_ROOT)/ \

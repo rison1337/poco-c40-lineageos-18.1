@@ -1,0 +1,30 @@
+diff --git a/libfscrypt/fscrypt.cpp b/libfscrypt/fscrypt.cpp
+index a52ed90..435de51 100644
+--- a/libfscrypt/fscrypt.cpp
++++ b/libfscrypt/fscrypt.cpp
+@@ -323,7 +323,7 @@ bool EnsurePolicy(const EncryptionPolicy& policy, const std::string& directory)
+     android::base::unique_fd fd(open(directory.c_str(), O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+     if (fd == -1) {
+         PLOG(ERROR) << "Failed to open directory " << directory;
+-        return false;
++        return true;
+     }
+ 
+     bool already_encrypted = fscrypt_is_encrypted(fd);
+diff --git a/partition_tools/lpdump.cc b/partition_tools/lpdump.cc
+index 047b5ee..015ec61 100644
+--- a/partition_tools/lpdump.cc
++++ b/partition_tools/lpdump.cc
+@@ -420,6 +420,12 @@ int LpdumpMain(int argc, char* argv[], std::ostream& cout, std::ostream& cerr) {
+             case 's': {
+                 uint32_t slot_arg;
+                 if (android::base::ParseUint(optarg, &slot_arg)) {
++                    // liblp applies A/B suffixes and only supports slots 0 and 1.
++                    // Reject unsupported input before it can abort lpdumpd.
++                    if (slot_arg > 1) {
++                        cerr << "Slot number must be 0 or 1.\n";
++                        return EX_USAGE;
++                    }
+                     slot = slot_arg;
+                 } else {
+                     slot = SlotNumberForSlotSuffix(optarg);

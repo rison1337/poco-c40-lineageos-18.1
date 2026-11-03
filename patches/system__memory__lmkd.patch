@@ -1,0 +1,14 @@
+diff --git a/lmkd.cpp b/lmkd.cpp
+index 3515fdb..25f5990 100644
+--- a/lmkd.cpp
++++ b/lmkd.cpp
+@@ -3037,6 +3037,9 @@ static int init(void) {
+         return -1;
+     }
+ 
++    int on = 1;
++    setsockopt(ctrl_sock.sock, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on));
++
+     ret = listen(ctrl_sock.sock, MAX_DATA_CONN);
+     if (ret < 0) {
+         ALOGE("lmkd control socket listen failed (errno=%d)", errno);

@@ -1,0 +1,446 @@
+{
+  "projects": [
+    {
+      "path": "bionic",
+      "upstream": "LineageOS/android_bionic",
+      "base_commit": "b67b03356ceb6171bd0cfdb88c3ee9413c476935",
+      "current_commit": "5264739fb05a4444b3f37473bab9351bf94b17c8",
+      "untracked": [],
+      "patch": "patches/bionic.patch",
+      "patch_sha256": "ea0a827e94068833df7feb7b63ebb011080c657c4a8328682f60ac90888002f3"
+    },
+    {
+      "path": "bootable/recovery",
+      "upstream": "LineageOS/android_bootable_recovery",
+      "base_commit": "ac8c9e96627671e53a1aebdacaf9748b7241a3df",
+      "current_commit": "756927f4463c064751fdf16727c3c3b30fba8dab",
+      "untracked": [],
+      "patch": "patches/bootable__recovery.patch",
+      "patch_sha256": "90c5b4c826b271208f1e3cdb007852a7f8f9cd4ff0a71a2048f700ab3fdd49f3"
+    },
+    {
+      "path": "build/make",
+      "upstream": "LineageOS/android_build",
+      "base_commit": "4fdba55d8946e7ede6d54422770b9bce45590924",
+      "current_commit": "f5b4b3350960436bd1638a035dc4aa2985b427df",
+      "untracked": [],
+      "patch": "patches/build__make.patch",
+      "patch_sha256": "436d3025f89ba63012142a0e4208a95c39a9dc1b76079b657d81e4500b74de88"
+    },
+    {
+      "path": "build/soong",
+      "upstream": "LineageOS/android_build_soong",
+      "base_commit": "91bbda1f3319dc1c61fea4f4715f4217d5537841",
+      "current_commit": "69ed9c9e622f8c76658ee35c21d6f83d188f59cb",
+      "untracked": [],
+      "patch": "patches/build__soong.patch",
+      "patch_sha256": "1c7a9115daeadb1810f133e9db8b9e1485bce9b2bb3b8d3d5b7c02ceb1f6b3a3"
+    },
+    {
+      "path": "device/lineage/sepolicy",
+      "upstream": "LineageOS/android_device_lineage_sepolicy",
+      "base_commit": "02f04d2b0a57f1c7435dc9f2ce8fac2640b38782",
+      "current_commit": "220c5c2cf268859a59de95a841094ed53be19d8b",
+      "untracked": [],
+      "patch": "patches/device__lineage__sepolicy.patch",
+      "patch_sha256": "bd5f7f62f073434bd423c7607d31bccdcf0f5ec2c04465925b0b3b1b90e7d48e"
+    },
+    {
+      "path": "device/phh/treble",
+      "upstream": "phhusson/device_phh_treble",
+      "base_commit": "a4f61cfcbb4109e1a74fffa23a91704b6ccdac7a",
+      "current_commit": "eb1bfc2ae66b86ab0cac36d294f4854bdc1696ec",
+      "untracked": [],
+      "patch": "patches/device__phh__treble.patch",
+      "patch_sha256": "71f771ce5aa59b79a404feadd5688cef453abf1e686908613857eef68e80c123"
+    },
+    {
+      "path": "external/chromium-webview/prebuilt/arm",
+      "upstream": "LineageOS/android_external_chromium-webview_prebuilt_arm",
+      "base_commit": "472d0ac3cf8e78982807bedd20279a537d6cdf68",
+      "current_commit": "472d0ac3cf8e78982807bedd20279a537d6cdf68",
+      "untracked": []
+    },
+    {
+      "path": "external/chromium-webview/prebuilt/arm64",
+      "upstream": "LineageOS/android_external_chromium-webview_prebuilt_arm64",
+      "base_commit": "5de662a4d42b57a2efe4114e499d38fa3ce41f9d",
+      "current_commit": "5de662a4d42b57a2efe4114e499d38fa3ce41f9d",
+      "untracked": []
+    },
+    {
+      "path": "external/chromium-webview/prebuilt/x86",
+      "upstream": "LineageOS/android_external_chromium-webview_prebuilt_x86",
+      "base_commit": "63a11af88b3c3ef7daa95f5d059740b354df9f2b",
+      "current_commit": "63a11af88b3c3ef7daa95f5d059740b354df9f2b",
+      "untracked": []
+    },
+    {
+      "path": "external/chromium-webview/prebuilt/x86_64",
+      "upstream": "LineageOS/android_external_chromium-webview_prebuilt_x86_64",
+      "base_commit": "a71893ba05acc77405e46262d458b47ab2b11e54",
+      "current_commit": "a71893ba05acc77405e46262d458b47ab2b11e54",
+      "untracked": []
+    },
+    {
+      "path": "external/f2fs-tools",
+      "upstream": "platform/external/f2fs-tools",
+      "base_commit": "75ec64039d6af9b04906b018c67342a6d2a09f1c",
+      "current_commit": "283e3c543d40a5080b1792e37f40cb29c88007ee",
+      "untracked": [],
+      "patch": "patches/external__f2fs-tools.patch",
+      "patch_sha256": "3341906adeebc14191712bab3928ca6d420c9a500d889ad2355915d7b811acde"
+    },
+    {
+      "path": "external/robolectric-shadows",
+      "upstream": "LineageOS/android_external_robolectric-shadows",
+      "base_commit": "82111d98867af5c0d17ca4669c8f3b03312b30b2",
+      "current_commit": "82111d98867af5c0d17ca4669c8f3b03312b30b2",
+      "untracked": [],
+      "patch": "patches/external__robolectric-shadows.patch",
+      "patch_sha256": "6e9a968af28df5090293b348f7a16bef0934ec354052cb9d178d07d13bbd1e21"
+    },
+    {
+      "path": "external/selinux",
+      "upstream": "platform/external/selinux",
+      "base_commit": "0731e73364dec7a4859acbe03c6c1fa3a06bf10d",
+      "current_commit": "35701b8a8350ca7ab9a04f0bc4f418a93b6d0283",
+      "untracked": [],
+      "patch": "patches/external__selinux.patch",
+      "patch_sha256": "c4daad6ce0367d7934620bc961a2cf9f1a22da34f17604ada41bf44e9fcf7a52"
+    },
+    {
+      "path": "external/skia",
+      "upstream": "LineageOS/android_external_skia",
+      "base_commit": "246118bdf77aa7713793e729dada73ec7076dac0",
+      "current_commit": "6840073244a2a5a65db8c5fb4d80b4838f171fdc",
+      "untracked": [],
+      "patch": "patches/external__skia.patch",
+      "patch_sha256": "815a99edfa86f9763dbbd02a776c8cf8a342f4a6584b8d2e22af40cc6384dbae"
+    },
+    {
+      "path": "frameworks/av",
+      "upstream": "LineageOS/android_frameworks_av",
+      "base_commit": "7db8eb3de32436269109f8168d24f19d90cb24ce",
+      "current_commit": "7b9901eef0d0d3edc38f709976136994a18105bf",
+      "untracked": [],
+      "patch": "patches/frameworks__av.patch",
+      "patch_sha256": "fbae3b1171fb3988ddc932fbf98a6c7bc372cdde70466ca59e6bc0d9811fdba0"
+    },
+    {
+      "path": "frameworks/base",
+      "upstream": "LineageOS/android_frameworks_base",
+      "base_commit": "2f5cf1e4fc1e8b1480d3c27a855f95d6d45429f4",
+      "current_commit": "1566e8f710132ad3290926a20a3030fce8bde2d6",
+      "untracked": [
+        "packages/SystemUI/tests/c40-bouncer/AndroidManifest.xml",
+        "packages/SystemUI/tests/c40-bouncer/C40BouncerTest.java",
+        "packages/SystemUI/tests/c40-bouncer/C40StatusBarLifecycleTest.java",
+        "packages/SystemUI/tests/c40-shade-depth/AndroidManifest.xml",
+        "packages/SystemUI/tests/c40-shade-depth/C40ShadeDepthTest.java",
+        "packages/SystemUI/tests/c40-volume/AndroidManifest.xml",
+        "packages/SystemUI/tests/c40-volume/C40VolumeControllerWorkerTest.java"
+      ],
+      "patch": "patches/frameworks__base.patch",
+      "patch_sha256": "82ffb55495c82616afe9f4805d53e32e72f0788d0687d6a18bb30a878faa46df"
+    },
+    {
+      "path": "frameworks/native",
+      "upstream": "LineageOS/android_frameworks_native",
+      "base_commit": "103c04dc9ff92585765f9076959be684351064c3",
+      "current_commit": "6f629b083e731c85550445d1905541e63211ffde",
+      "untracked": [],
+      "patch": "patches/frameworks__native.patch",
+      "patch_sha256": "116513a4effdcf5791bab9f5cc5d5ab1bdf30622cdf1c8296cf0e2101ac4213f"
+    },
+    {
+      "path": "frameworks/opt/net/wifi",
+      "upstream": "LineageOS/android_frameworks_opt_net_wifi",
+      "base_commit": "18e932aec8672fef4f9fbeb6bb0d19ae20558898",
+      "current_commit": "a2469482e9dcd20c5f1c8ba66d4d8fdd514c338f",
+      "untracked": [],
+      "patch": "patches/frameworks__opt__net__wifi.patch",
+      "patch_sha256": "26004027ea899e1094aba7d24a1bd1510ddcec8e15f35f618acbe9aa169549e8"
+    },
+    {
+      "path": "frameworks/opt/telephony",
+      "upstream": "LineageOS/android_frameworks_opt_telephony",
+      "base_commit": "efc958ac5a609659ef4b2fd67352651ed2116a02",
+      "current_commit": "02d495e62a4b3e69ac7f461549b04687f2195f4c",
+      "untracked": [],
+      "patch": "patches/frameworks__opt__telephony.patch",
+      "patch_sha256": "e174e72e36ab3d795eef282393ba45f7a9d1bdd86c76922d243df7934d521f36"
+    },
+    {
+      "path": "lineage-sdk",
+      "upstream": "LineageOS/android_lineage-sdk",
+      "base_commit": "5f1b14d27249f8b7f035060005e07ac9388e5470",
+      "current_commit": "96e77b0632649a6c08b2f000188d25fd048181b7",
+      "untracked": [],
+      "patch": "patches/lineage-sdk.patch",
+      "patch_sha256": "27fcb9455f9a08ee8f996c0f43458d60039681b4263feea38426d7feee9294c7"
+    },
+    {
+      "path": "packages/apps/Bluetooth",
+      "upstream": "LineageOS/android_packages_apps_Bluetooth",
+      "base_commit": "c3172d173b528ceeff005f6c1397087b1c51146a",
+      "current_commit": "c2394583d60deb5254624d564bd1c18956e8f63b",
+      "untracked": [],
+      "patch": "patches/packages__apps__Bluetooth.patch",
+      "patch_sha256": "3c9be7c7e480b2b64180a97018f75be9edb2ac2cc91414a93713307c031ddc82"
+    },
+    {
+      "path": "packages/apps/Camera2",
+      "upstream": "LineageOS/android_packages_apps_Camera2",
+      "base_commit": "ba73b97e236cb7bf15d91940b1639300298809e3",
+      "current_commit": "ba73b97e236cb7bf15d91940b1639300298809e3",
+      "untracked": [],
+      "patch": "patches/packages__apps__Camera2.patch",
+      "patch_sha256": "5f77e895c69b099fdcff43c5c87f167472121391c7f966576b31125341bf5684"
+    },
+    {
+      "path": "packages/apps/Jelly",
+      "upstream": "LineageOS/android_packages_apps_Jelly",
+      "base_commit": "b3b92da43bb02db69cffe76b854940c8bb634002",
+      "current_commit": "ac520d62243d5554b4cc9384e79e59c3e194ea82",
+      "untracked": [],
+      "patch": "patches/packages__apps__Jelly.patch",
+      "patch_sha256": "e03f716c501b06501b6d2487f17e691a699e5106ccb333c4644ad26a11e4ec7d"
+    },
+    {
+      "path": "packages/apps/LineageParts",
+      "upstream": "LineageOS/android_packages_apps_LineageParts",
+      "base_commit": "2355efff0185485290939987b958f4306f1ef535",
+      "current_commit": "246b99fe82630db15c7bfb5170f32f95d7dfe31a",
+      "untracked": [],
+      "patch": "patches/packages__apps__LineageParts.patch",
+      "patch_sha256": "e7f6adb0540daeff16d72adcaf4d2afb3c7c68c7bc84b0c6c738e49b4f7f3aec"
+    },
+    {
+      "path": "packages/apps/Messaging",
+      "upstream": "LineageOS/android_packages_apps_Messaging",
+      "base_commit": "22ac97decae0d2c0738d682bca5325b1fac2fa78",
+      "current_commit": "2e7fee7f9e3f91abcf89eb45c7ec25eaf2bb31c9",
+      "untracked": [],
+      "patch": "patches/packages__apps__Messaging.patch",
+      "patch_sha256": "3a634e4ba48f1dd4205aae379bc0eee980dddd89becaa9ca6522bfe55f0b35a5"
+    },
+    {
+      "path": "packages/apps/Settings",
+      "upstream": "LineageOS/android_packages_apps_Settings",
+      "base_commit": "31468874b701614b372765ee02d723b507f33004",
+      "current_commit": "8e5282fc6b2e6670943af977ab47e19be68735c5",
+      "untracked": [],
+      "patch": "patches/packages__apps__Settings.patch",
+      "patch_sha256": "5e463a13c1b6553176c77f9d4637a40a46114972bf5f196d3cdfb8733092ecb2"
+    },
+    {
+      "path": "packages/apps/SetupWizard",
+      "upstream": "LineageOS/android_packages_apps_SetupWizard",
+      "base_commit": "a965cffe53f566c0c29ffd4e11fe3bf3aac46d46",
+      "current_commit": "a965cffe53f566c0c29ffd4e11fe3bf3aac46d46",
+      "untracked": [],
+      "patch": "patches/packages__apps__SetupWizard.patch",
+      "patch_sha256": "b454145f00fa769ebf40e435eda3ad159b3d8dfd48ecd09251078572f7188374"
+    },
+    {
+      "path": "packages/apps/Trebuchet",
+      "upstream": "LineageOS/android_packages_apps_Trebuchet",
+      "base_commit": "63f2e824fe6a6ec9b56c3f4393b38b8e3d570485",
+      "current_commit": "74aa8b517a750aa5a34babe53fda061283fbf9bb",
+      "untracked": [],
+      "patch": "patches/packages__apps__Trebuchet.patch",
+      "patch_sha256": "39888bd74b93a89cf36834b3c8cccbe61432755d79b81e9d86e6fc20909edd06"
+    },
+    {
+      "path": "packages/services/Telephony",
+      "upstream": "LineageOS/android_packages_services_Telephony",
+      "base_commit": "4c675054ae5e03b6e71a0b86e26921e3d2efa700",
+      "current_commit": "60e1669cd224d6e34bdec2b6877d08e36f9b26ea",
+      "untracked": [],
+      "patch": "patches/packages__services__Telephony.patch",
+      "patch_sha256": "2e5b0e62ba9d7ca8928aa1ddbe13d02412505654990e03e33dc774d374ba75a6"
+    },
+    {
+      "path": "system/bt",
+      "upstream": "LineageOS/android_system_bt",
+      "base_commit": "bcca9a572f1cc539ba21ebe940c3642ce8707d1a",
+      "current_commit": "411a648776dff40f6c50d5ce8b1a92e52c86e1f9",
+      "untracked": [],
+      "patch": "patches/system__bt.patch",
+      "patch_sha256": "9194be21523b482e753196d4dd692b08fa5b793709e03f575e3b425fdd24a0fb"
+    },
+    {
+      "path": "system/core",
+      "upstream": "LineageOS/android_system_core",
+      "base_commit": "92420679ffbd50b79d76525085b21278f8497037",
+      "current_commit": "9edc13b7d963f4899cda6d74c1ad110ca4456999",
+      "untracked": [],
+      "patch": "patches/system__core.patch",
+      "patch_sha256": "e26dd4bef070973837c9b6b2fccbba2be33f480760b6668d9cc67c7e4f54abb4"
+    },
+    {
+      "path": "system/extras",
+      "upstream": "LineageOS/android_system_extras",
+      "base_commit": "54a53b6e30f8a787241932b6da0685c4e8be183d",
+      "current_commit": "bb56d77ca027618152ff2e4cf803b60efd898238",
+      "untracked": [],
+      "patch": "patches/system__extras.patch",
+      "patch_sha256": "b7039835bbe62983dca21a27e2ddbf0feb8af7c05a78366837bd555eb6dc77b7"
+    },
+    {
+      "path": "system/hardware/interfaces",
+      "upstream": "platform/system/hardware/interfaces",
+      "base_commit": "a2fe15bf96c8bb88c174ac61eab6c013a04332c4",
+      "current_commit": "c04b19fb77e2b9fa485d52046052ace975d01e9c",
+      "untracked": [],
+      "patch": "patches/system__hardware__interfaces.patch",
+      "patch_sha256": "f47b3bcf5c570d12ba51fad8a55922618364326269a6d06ead72c4b82931ff12"
+    },
+    {
+      "path": "system/libhwbinder",
+      "upstream": "platform/system/libhwbinder",
+      "base_commit": "c98cc47aa6a19487e7aa6edcfdf4a37be99f6ff3",
+      "current_commit": "26ea085d70bc578f9b0d28a9cde9fbecbd77137e",
+      "untracked": [],
+      "patch": "patches/system__libhwbinder.patch",
+      "patch_sha256": "899322c7a5a69db5b686bdeccdbe0bb4112192e98b04f9db7d5367c3616fbddb"
+    },
+    {
+      "path": "system/linkerconfig",
+      "upstream": "platform/system/linkerconfig",
+      "base_commit": "935f98a97b2e225cc515f2c4fcfec978ea2fa523",
+      "current_commit": "10683320d1dda3dade08fb3edde9255af88a1acf",
+      "untracked": [],
+      "patch": "patches/system__linkerconfig.patch",
+      "patch_sha256": "bd1171cc0a187282c35ec5c42d1849d1c454e7ea13dcff90753b41f91fbc705c"
+    },
+    {
+      "path": "system/memory/lmkd",
+      "upstream": "platform/system/memory/lmkd",
+      "base_commit": "1ff19f401fe249dec8bbcd2e77617ade2d795d85",
+      "current_commit": "544965393bf194c41c79beab8c02dd1982560768",
+      "untracked": [],
+      "patch": "patches/system__memory__lmkd.patch",
+      "patch_sha256": "aae3941f8ab1eb297df0f6389006fde666783d69d6e6c1ba03a6e8f5d49ba327"
+    },
+    {
+      "path": "system/netd",
+      "upstream": "LineageOS/android_system_netd",
+      "base_commit": "c013516ff3b78598cbab7e1d0b86583732273b8f",
+      "current_commit": "5b6708518092136c06237c1997c1ecee6d728ad6",
+      "untracked": [],
+      "patch": "patches/system__netd.patch",
+      "patch_sha256": "686be7fc099e20988be8c29da0b49f41958bdccaff00548204a0302865fdc42c"
+    },
+    {
+      "path": "system/nfc",
+      "upstream": "LineageOS/android_system_nfc",
+      "base_commit": "e56578d0fc93b4ca4375c07e7f4bca82b8aa2ceb",
+      "current_commit": "c1831a4e9a4a98c9657a0061993f129bb6f3488e",
+      "untracked": [],
+      "patch": "patches/system__nfc.patch",
+      "patch_sha256": "71b7273026171f3ff2abc38b4db83964b529ca4d526b4ab7d07df3182a941390"
+    },
+    {
+      "path": "system/sepolicy",
+      "upstream": "LineageOS/android_system_sepolicy",
+      "base_commit": "c590512ecdcf4980bc5ed1a5896be929c403b29c",
+      "current_commit": "1f1d269ec078c91d3760c53e06684c5a5b65e686",
+      "untracked": [],
+      "patch": "patches/system__sepolicy.patch",
+      "patch_sha256": "55d122b28b675d0eaeaf5034586575f845025cd3b084ec01e5a9d0a60686a8b9"
+    },
+    {
+      "path": "system/vold",
+      "upstream": "LineageOS/android_system_vold",
+      "base_commit": "85ffd688e91103bdfad15353bc807d1133def876",
+      "current_commit": "0321b27301c88b15b29034d6255b7f601d3d61b3",
+      "untracked": [],
+      "patch": "patches/system__vold.patch",
+      "patch_sha256": "4b3c64a00719dcdbd110b4e7e552f54e2dac669ec8bee9ff48c2768e640cc83e"
+    },
+    {
+      "path": "vendor/hardware_overlay",
+      "upstream": "phhusson/vendor_hardware_overlay",
+      "base_commit": "51a175d0f5ad6dbb9817b43c752e001563b27bb9",
+      "current_commit": "f31bbca1fa6faa9ac4b7140c7ab45921d6a4e85c",
+      "untracked": [],
+      "patch": "patches/vendor__hardware_overlay.patch",
+      "patch_sha256": "829f09f1b2b7cf480f02dd664a5800fbaf79fa1c303f25e6bd0135ef9b19d68e"
+    },
+    {
+      "path": "vendor/lineage",
+      "upstream": "LineageOS/android_vendor_lineage",
+      "base_commit": "9acedc7d0e3866d90911a0112074fc312ca11ed5",
+      "current_commit": "db66e79d4e026f529697d46546bb0252f5dbb406",
+      "untracked": [],
+      "patch": "patches/vendor__lineage.patch",
+      "patch_sha256": "3ecf5135968fdc61d1f8bf58d463e2bf3f9e6ade13eb89ba0822ffa5f42b27e5"
+    },
+    {
+      "path": "vendor/qcom/opensource/fm-commonsys",
+      "upstream": "LineageOS/android_vendor_qcom_opensource_fm-commonsys",
+      "base_commit": "eae6909108afd9035b40685111e1fd7b3dfe58d9",
+      "current_commit": "fc8b22a518ba25aad44e8a0c1af68cf4cf5deb72",
+      "untracked": [],
+      "patch": "patches/vendor__qcom__opensource__fm-commonsys.patch",
+      "patch_sha256": "8fc3778fa3619a3768f48ad7fd60c28805d025f8cbf29a4f127f418c04334be2"
+    },
+    {
+      "path": "vendor/vndk-tests",
+      "upstream": "phhusson/vendor_vndk-tests",
+      "base_commit": "533390a1d6bc98d86de6b9aab56825c1f03fddcb",
+      "current_commit": "af6c0d79a78df70946375ac47d41510a8021a93e",
+      "untracked": [],
+      "patch": "patches/vendor__vndk-tests.patch",
+      "patch_sha256": "aa65af4920e7013156652429a8822dd7fd5073a539e2df8fe1e2c6a7917d9c70"
+    }
+  ],
+  "extra_trees": [
+    {
+      "path": "vendor/xiaomi/frost-ims",
+      "files": 54
+    },
+    {
+      "path": "vendor/xiaomi/frost-fm",
+      "files": 9
+    },
+    {
+      "path": "vendor/xiaomi/frost-signing",
+      "files": 3
+    }
+  ],
+  "missing_checkout": [],
+  "binary_inputs": [
+    {
+      "path": "external/chromium-webview/prebuilt/arm/webview.apk",
+      "deleted": false,
+      "bytes": 98126751,
+      "sha256": "0dc261c3f37e9ac16a4f593ef316a097fc59815bb2082a8e38c519647bbcb3cc"
+    },
+    {
+      "path": "external/chromium-webview/prebuilt/arm64/webview.apk",
+      "deleted": false,
+      "bytes": 260835655,
+      "sha256": "1d2f61832b2596b0046cb82cf3634609ea866098d097a83fac27c35272ac726a"
+    },
+    {
+      "path": "external/chromium-webview/prebuilt/x86/webview.apk",
+      "deleted": false,
+      "bytes": 157109134,
+      "sha256": "57430359ec0ca504f8fcf33b8f5b32cca51085ae2c63e0b50dea3c5ff6d8510e"
+    },
+    {
+      "path": "external/chromium-webview/prebuilt/x86_64/webview.apk",
+      "deleted": false,
+      "bytes": 358908264,
+      "sha256": "a98312a1427ca5c029e30009cc4a002e90affe9370e42b7f93a88ee6425c1278"
+    },
+    {
+      "path": "frameworks/base/packages/SystemUI/res/drawable-nodpi/fod_icon_pressed.png",
+      "deleted": true
+    }
+  ],
+  "completed": true
+}

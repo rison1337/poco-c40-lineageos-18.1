@@ -1,0 +1,11 @@
+diff --git a/suspend/1.0/default/android.system.suspend@1.0-service.rc b/suspend/1.0/default/android.system.suspend@1.0-service.rc
+index 965ca16..c5d3869 100644
+--- a/suspend/1.0/default/android.system.suspend@1.0-service.rc
++++ b/suspend/1.0/default/android.system.suspend@1.0-service.rc
+@@ -1,5 +1,5 @@
+ service system_suspend /system/bin/hw/android.system.suspend@1.0-service
+-    class early_hal
++    class hal
+     user system
+     group system wakelock
+     capabilities BLOCK_SUSPEND

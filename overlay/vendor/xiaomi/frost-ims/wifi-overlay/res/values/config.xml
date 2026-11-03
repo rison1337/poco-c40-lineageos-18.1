@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The frost driver advertises start_sched_scan and 16 scheduled SSIDs.
+         The Wi-Fi module default is false; that rejects disconnected PNO
+         before wificond can ask the hardware to reconnect with the screen off. -->
+    <bool name="config_wifi_background_scan_support">true</bool>
+</resources>

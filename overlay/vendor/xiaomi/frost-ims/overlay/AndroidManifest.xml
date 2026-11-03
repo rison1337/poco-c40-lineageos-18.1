@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="local.frost.overlay.ims">
+    <overlay android:targetPackage="com.android.phone"
+        android:requiredSystemPropertyName="ro.product.vendor.device"
+        android:requiredSystemPropertyValue="frost"
+        android:priority="351" android:isStatic="true" />
+</manifest>

@@ -1,0 +1,243 @@
+{
+  "com.android.adbd": {
+    "source": "system/core/adb/apex",
+    "payload_keys": [
+      "com.android.adbd.avbpubkey",
+      "com.android.adbd.pem"
+    ],
+    "container_certificates": [
+      ":com.android.adbd.certificate",
+      "com.android.adbd"
+    ]
+  },
+  "com.android.art.release": {
+    "source": "art/build/apex",
+    "payload_keys": [
+      "com.android.art.avbpubkey",
+      "com.android.art.pem"
+    ],
+    "container_certificates": [
+      "com.android.art",
+      ":com.android.art.certificate",
+      ":com.android.art.certificate",
+      ":com.android.art.certificate"
+    ]
+  },
+  "com.android.cellbroadcast": {
+    "source": "packages/apps/CellBroadcastReceiver/apex",
+    "payload_keys": [
+      "com.android.cellbroadcast.avbpubkey",
+      "com.android.cellbroadcast.pem"
+    ],
+    "container_certificates": [
+      ":com.android.cellbroadcast.certificate",
+      "com.android.cellbroadcast"
+    ]
+  },
+  "com.android.conscrypt": {
+    "source": "external/conscrypt/apex",
+    "payload_keys": [
+      "com.android.conscrypt.avbpubkey",
+      "com.android.conscrypt.pem"
+    ],
+    "container_certificates": [
+      ":com.android.conscrypt.certificate",
+      "com.android.conscrypt"
+    ]
+  },
+  "com.android.extservices": {
+    "source": "frameworks/base/apex/extservices",
+    "payload_keys": [
+      "com.android.extservices.avbpubkey",
+      "com.android.extservices.pem"
+    ],
+    "container_certificates": [
+      ":com.android.extservices.certificate",
+      "com.android.extservices"
+    ]
+  },
+  "com.android.i18n": {
+    "source": "libcore/apex",
+    "payload_keys": [
+      "com.android.i18n.avbpubkey",
+      "com.android.i18n.pem"
+    ],
+    "container_certificates": [
+      ":com.android.i18n.certificate",
+      "com.android.i18n"
+    ]
+  },
+  "com.android.ipsec": {
+    "source": "packages/modules/IPsec/apex",
+    "payload_keys": [
+      "com.android.ipsec.avbpubkey",
+      "com.android.ipsec.pem"
+    ],
+    "container_certificates": [
+      ":com.android.ipsec.certificate",
+      "com.android.ipsec"
+    ]
+  },
+  "com.android.media": {
+    "source": "frameworks/av/apex",
+    "payload_keys": [
+      "com.android.media.avbpubkey",
+      "com.android.media.pem",
+      "com.android.media.swcodec.avbpubkey",
+      "com.android.media.swcodec.pem"
+    ],
+    "container_certificates": [
+      ":com.android.media.certificate",
+      ":com.android.media.swcodec.certificate",
+      "com.android.media",
+      "com.android.media.swcodec"
+    ]
+  },
+  "com.android.media.swcodec": {
+    "source": "frameworks/av/apex",
+    "payload_keys": [
+      "com.android.media.avbpubkey",
+      "com.android.media.pem",
+      "com.android.media.swcodec.avbpubkey",
+      "com.android.media.swcodec.pem"
+    ],
+    "container_certificates": [
+      ":com.android.media.certificate",
+      ":com.android.media.swcodec.certificate",
+      "com.android.media",
+      "com.android.media.swcodec"
+    ]
+  },
+  "com.android.mediaprovider": {
+    "source": "packages/providers/MediaProvider/apex",
+    "payload_keys": [
+      "com.android.mediaprovider.avbpubkey",
+      "com.android.mediaprovider.pem"
+    ],
+    "container_certificates": [
+      ":com.android.mediaprovider.certificate",
+      "com.android.mediaprovider"
+    ]
+  },
+  "com.android.neuralnetworks": {
+    "source": "frameworks/ml/nn/apex",
+    "payload_keys": [
+      "com.android.neuralnetworks.avbpubkey",
+      "com.android.neuralnetworks.pem"
+    ],
+    "container_certificates": [
+      "com.android.neuralnetworks",
+      ":com.android.neuralnetworks.certificate"
+    ]
+  },
+  "com.android.os.statsd": {
+    "source": "frameworks/base/apex/statsd",
+    "payload_keys": [
+      "com.android.os.statsd.avbpubkey",
+      "com.android.os.statsd.pem"
+    ],
+    "container_certificates": [
+      ":com.android.os.statsd.certificate",
+      "com.android.os.statsd"
+    ]
+  },
+  "com.android.permission": {
+    "source": "frameworks/base/apex/permission",
+    "payload_keys": [
+      "com.android.permission.avbpubkey",
+      "com.android.permission.pem"
+    ],
+    "container_certificates": [
+      ":com.android.permission.certificate",
+      "com.android.permission"
+    ]
+  },
+  "com.android.resolv": {
+    "source": "packages/modules/DnsResolver/apex",
+    "payload_keys": [
+      "com.android.resolv.avbpubkey",
+      "com.android.resolv.pem"
+    ],
+    "container_certificates": [
+      ":com.android.resolv.certificate",
+      "testcert"
+    ]
+  },
+  "com.android.runtime": {
+    "source": "bionic/apex",
+    "payload_keys": [
+      "com.android.runtime.avbpubkey",
+      "com.android.runtime.pem"
+    ],
+    "container_certificates": [
+      "com.android.runtime",
+      ":com.android.runtime.certificate"
+    ]
+  },
+  "com.android.sdkext": {
+    "source": "packages/modules/SdkExtensions",
+    "payload_keys": [
+      "com.android.sdkext.avbpubkey",
+      "com.android.sdkext.pem"
+    ],
+    "container_certificates": [
+      ":com.android.sdkext.certificate",
+      "com.android.sdkext"
+    ]
+  },
+  "com.android.tethering": {
+    "source": "frameworks/base/packages/Tethering/apex",
+    "payload_keys": [
+      "com.android.tethering.avbpubkey",
+      "com.android.tethering.pem"
+    ],
+    "container_certificates": [
+      "com.android.tethering"
+    ]
+  },
+  "com.android.tzdata": {
+    "source": "system/timezone/apex",
+    "payload_keys": [
+      "com.android.tzdata.avbpubkey",
+      "com.android.tzdata.pem"
+    ],
+    "container_certificates": [
+      ":com.android.tzdata.certificate",
+      "com.android.tzdata"
+    ]
+  },
+  "com.android.vndk.current": {
+    "source": "packages/modules/vndk/apex",
+    "payload_keys": [
+      "com.android.vndk.current.pubkey",
+      "com.android.vndk.current.pem",
+      "com.android.vndk.v29.pubkey",
+      "com.android.vndk.v29.pem",
+      "com.android.vndk.v28.pubkey",
+      "com.android.vndk.v28.pem",
+      "com.android.vndk.v27.pubkey",
+      "com.android.vndk.v27.pem"
+    ],
+    "container_certificates": [
+      ":com.android.vndk.current.certificate",
+      "com.android.vndk.current",
+      ":com.android.vndk.v29.certificate",
+      "com.android.vndk.v29",
+      ":com.android.vndk.v28.certificate",
+      "com.android.vndk.v28",
+      ":com.android.vndk.v27.certificate",
+      "com.android.vndk.v27"
+    ]
+  },
+  "com.android.wifi": {
+    "source": "frameworks/opt/net/wifi/service/apex",
+    "payload_keys": [
+      "com.android.wifi.avbpubkey",
+      "com.android.wifi.pem"
+    ],
+    "container_certificates": [
+      ":com.android.wifi.certificate",
+      "com.android.wifi"
+    ]
+  }
+}

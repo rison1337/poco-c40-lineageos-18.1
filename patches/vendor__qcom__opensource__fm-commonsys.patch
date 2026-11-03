@@ -1,0 +1,846 @@
+diff --git a/fmapp2/Android.bp b/fmapp2/Android.bp
+index 518e3e6..6d01a7d 100755
+--- a/fmapp2/Android.bp
++++ b/fmapp2/Android.bp
+@@ -3,7 +3,7 @@
+ android_app {
+     name: "FM2",
+ 
+-    srcs: ["src/com/caf/fmradio/CommaSeparatedFreqFileReader.java"] + ["src/com/caf/fmradio/FMAdapterApp.java"] + ["src/com/caf/fmradio/FMMediaButtonIntentReceiver.java"] + ["src/com/caf/fmradio/FMRadio.java"] + ["src/com/caf/fmradio/FMRadioService.java"] + ["src/com/caf/fmradio/FmSharedPreferences.java"] + ["src/com/caf/fmradio/FMStats.java"] + ["src/com/caf/fmradio/FmTags.java"] + ["src/com/caf/fmradio/GetNextFreqInterface.java"] + ["src/com/caf/fmradio/HorizontalNumberPicker.java"] + ["src/com/caf/fmradio/PresetList.java"] + ["src/com/caf/fmradio/PresetStation.java"] + ["src/com/caf/fmradio/Settings.java"] + ["src/com/caf/fmradio/StationListActivity.java"] + ["src/com/caf/fmradio/IFMRadioService.aidl"] + ["src/com/caf/fmradio/IFMRadioServiceCallbacks.aidl"] + ["src/com/caf/hc_utils/**/*.java"],
++    srcs: ["src/com/caf/fmradio/CommaSeparatedFreqFileReader.java"] + ["src/com/caf/fmradio/FMAdapterApp.java"] + ["src/com/caf/fmradio/FMMediaButtonIntentReceiver.java"] + ["src/com/caf/fmradio/FMRadio.java"] + ["src/com/caf/fmradio/FMRadioService.java"] + ["src/com/caf/fmradio/FmRecordingStore.java"] + ["src/com/caf/fmradio/FmSharedPreferences.java"] + ["src/com/caf/fmradio/FMStats.java"] + ["src/com/caf/fmradio/FmTags.java"] + ["src/com/caf/fmradio/GetNextFreqInterface.java"] + ["src/com/caf/fmradio/HorizontalNumberPicker.java"] + ["src/com/caf/fmradio/PresetList.java"] + ["src/com/caf/fmradio/PresetStation.java"] + ["src/com/caf/fmradio/Settings.java"] + ["src/com/caf/fmradio/StationListActivity.java"] + ["src/com/caf/fmradio/IFMRadioService.aidl"] + ["src/com/caf/fmradio/IFMRadioServiceCallbacks.aidl"] + ["src/com/caf/hc_utils/**/*.java"],
+     certificate: "platform",
+     jni_libs: ["libqcomfm_jni"],
+     libs: ["qcom.fmradio"],
+diff --git a/fmapp2/AndroidManifest.xml b/fmapp2/AndroidManifest.xml
+index 595ee7d..33b2375 100644
+--- a/fmapp2/AndroidManifest.xml
++++ b/fmapp2/AndroidManifest.xml
+@@ -38,8 +38,6 @@
+     <uses-permission android:name="android.permission.WAKE_LOCK" />
+     <uses-permission android:name="android.permission.INTERNET" />
+     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+     <uses-permission android:name="android.permission.CHANGE_COMPONENT_ENABLED_STATE"/>
+     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+diff --git a/fmapp2/src/com/caf/fmradio/FMRadio.java b/fmapp2/src/com/caf/fmradio/FMRadio.java
+index e75e4e6..44476a0 100644
+--- a/fmapp2/src/com/caf/fmradio/FMRadio.java
++++ b/fmapp2/src/com/caf/fmradio/FMRadio.java
+@@ -282,57 +282,42 @@ public class FMRadio extends Activity
+    public static boolean mUpdatePickerValue = false;
+ 
+    private LoadedDataAndState SavedDataAndState = null;
++   private static final String STATE_AUTO_ENABLE = "auto_enable_on_first_connection";
++   private boolean mAutoEnableOnFirstConnection = true;
+    private static String mBTsoc = "invalid";
+ 
+    /** fm stats property string */
+    public static final String FM_STATS_PROP = "persist.fm.stats";
+ 
+    private BroadcastReceiver mFmSettingReceiver = null;
+-   private static String[] RECORD_PERMISSIONS = {
+-            Manifest.permission.RECORD_AUDIO,
+-            Manifest.permission.CAPTURE_AUDIO_OUTPUT,
+-            Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE
+-    };
++   private static final String[] RECORD_PERMISSIONS = { Manifest.permission.RECORD_AUDIO };
+    private static final int ALL_PERMISSIONS = 101;
++   private boolean mRecordingPermissionPending;
+ 
+-    @Override
+-public void onRequestPermissionsResult(int requestCode, String[] permissions,  int[] grantResults) {
+-    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+-    // for PERMISSION_CODE:
+-    switch (requestCode){
+-        case 101:
+-            if(grantResults.length > 0){
+-                if(grantResults[0] == PackageManager.PERMISSION_GRANTED){
+-                    Log.d(LOGTAG,"  RECORD_AUDIO permission granted");
+-                }
+-                else{ Log.d(LOGTAG,"  no RECORD_AUDIO permissions"); }
+-                if(grantResults[1] == PackageManager.PERMISSION_GRANTED){
+-                    Log.d(LOGTAG,"   CAPTURE_AUDIO_OUTPUT permission granted");
+-                }
+-                else{  Log.d(LOGTAG,"   no CAPTURE_AUDIO_OUTPUT permissions"); }
+-                if(grantResults[2] == PackageManager.PERMISSION_GRANTED){
+-                    Log.d(LOGTAG,"   WRITE_EXTERNAL_STORAGE permission granted");
+-                }
+-                else{ Log.d(LOGTAG,"   no WRITE_EXTERNAL_STORAGE permissions"); }
+-                if(grantResults[3] == PackageManager.PERMISSION_GRANTED){
+-                    Log.d(LOGTAG,"  READ_EXTERNAL_STORAGE permission granted");
+-                }
+-                else{Log.d(LOGTAG,"  no READ_EXTERNAL_STORAGE permissions"); }
+-            }
+-    }
+-}
++   @Override
++   public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
++       super.onRequestPermissionsResult(requestCode, permissions, grantResults);
++       if (requestCode == ALL_PERMISSIONS && mRecordingPermissionPending) {
++           mRecordingPermissionPending = false;
++           if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
++               startRecording();
++       }
++   }
+    /** Called when the activity is first created. */
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+       super.onCreate(savedInstanceState);
++      if (savedInstanceState != null) {
++          mAutoEnableOnFirstConnection = savedInstanceState.getBoolean(STATE_AUTO_ENABLE, false);
++      }
+       setVolumeControlStream(AudioManager.STREAM_MUSIC);
+       Log.d(LOGTAG, "onCreate");
+       mPrefs = new FmSharedPreferences(this);
+       mCommandActive = CMD_NONE;
+       mCommandFailed = CMD_NONE;
+ 
+-      Log.d(LOGTAG, "onCreate permssion req");
+-      requestPermissions(RECORD_PERMISSIONS, ALL_PERMISSIONS);
++      if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
++          requestPermissions(RECORD_PERMISSIONS, ALL_PERMISSIONS);
+       Point p = new Point();
+       getWindowManager().getDefaultDisplay().getSize(p);
+       mDisplayWidth = p.x;
+@@ -447,7 +432,8 @@ public void onRequestPermissionsResult(int requestCode, String[] permissions,  i
+       if ((mERadioTextScroller == null) && (mERadioTextTV != null)) {
+           mERadioTextScroller = new ScrollerText(mERadioTextTV);
+       }
+-      mBTsoc = SystemProperties.get("vendor.qcom.bluetooth.soc");
++      mBTsoc = qcom.fmradio.FmReceiver.isCherokeeChip() ? "cherokee"
++              : SystemProperties.get("vendor.qcom.bluetooth.soc");
+    }
+ 
+    protected void setDisplayvalue(){
+@@ -656,6 +642,12 @@ public void onRequestPermissionsResult(int requestCode, String[] permissions,  i
+       enableRadioOnOffUI();
+        }
+    };
++   @Override
++   protected void onSaveInstanceState(Bundle outState) {
++      outState.putBoolean(STATE_AUTO_ENABLE, mAutoEnableOnFirstConnection);
++      super.onSaveInstanceState(outState);
++   }
++
+    private static class LoadedDataAndState {
+       public LoadedDataAndState(){};
+       public boolean onOrOff;
+@@ -786,7 +778,9 @@ public void onRequestPermissionsResult(int requestCode, String[] permissions,  i
+          item = menu.findItem(MENU_RECORD_STOP);
+          if (item != null) {
+              item.setVisible(true);
+-             item.setEnabled(recording && radioOn && (!isAnalogModeEnabled()));
++             // An active recording must always be stoppable, including after
++             // a route or radio-state change.
++             item.setEnabled(recording);
+          }
+       }
+ 
+@@ -1746,8 +1740,11 @@ public void onRequestPermissionsResult(int requestCode, String[] permissions,  i
+    private void startRecording() {
+       if(mService != null) {
+          try {
+-             Log.d(LOGTAG, "startRecording permssion req");
+-             requestPermissions(RECORD_PERMISSIONS, ALL_PERMISSIONS);
++             if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
++                 mRecordingPermissionPending = true;
++                 requestPermissions(RECORD_PERMISSIONS, ALL_PERMISSIONS);
++                 return;
++             }
+              mRecording = mService.startRecording();
+          }catch (RemoteException e) {
+              e.printStackTrace();
+@@ -1760,6 +1757,7 @@ public void onRequestPermissionsResult(int requestCode, String[] permissions,  i
+              Log.e(LOGTAG, "Fected duration: " + durationInMins);
+              initiateRecordDurationTimer( durationInMins );
+          }
++         invalidateOptionsMenu();
+       }
+    }
+ 
+@@ -1793,6 +1791,7 @@ public void onRequestPermissionsResult(int requestCode, String[] permissions,  i
+               e.printStackTrace();
+            }
+         }
++        invalidateOptionsMenu();
+    }
+ 
+    private boolean isRecording() {
+@@ -2989,11 +2988,19 @@ public void onRequestPermissionsResult(int requestCode, String[] permissions,  i
+ 
+    public  boolean bindToService(Context context, ServiceConnection callback) {
+       Log.e(LOGTAG, "bindToService: Context with serviceconnection callback");
+-      context.startService(new Intent(context, FMRadioService.class));
++      // onStart can run while the uid is still TOP_SLEEPING. Binding may
++      // create the idle service without an illegal background start; actual
++      // playback starts its foreground lifetime after posting a notification.
++      if (sConnectionMap.containsKey(context)) {
++          return true;
++      }
+       ServiceBinder sb = new ServiceBinder(callback);
+-      sConnectionMap.put(context, sb);
+-      return context.bindService((new Intent()).setClass(context,
+-                                                         FMRadioService.class), sb, 0);
++      boolean bound = context.bindService(new Intent(context, FMRadioService.class),
++                                         sb, Context.BIND_AUTO_CREATE);
++      if (bound) {
++          sConnectionMap.put(context, sb);
++      }
++      return bound;
+    }
+ 
+    public  void unbindFromService(Context context) {
+@@ -3046,7 +3053,12 @@ public void onRequestPermissionsResult(int requestCode, String[] permissions,  i
+          if (mService != null) {
+             try {
+                mService.registerCallbacks(mServiceCallbacks);
+-               if (SavedDataAndState == null) {
++               // An idle service may be recreated while this activity remains
++               // alive. Rebinding must preserve the user's previous power-off;
++               // automatic start belongs only to the first connection.
++               boolean autoEnable = mAutoEnableOnFirstConnection && SavedDataAndState == null;
++               mAutoEnableOnFirstConnection = false;
++               if (autoEnable) {
+                   enableRadio();
+                }else if (isFmOn()) {
+                   enableRadioOnOffUI(true);
+diff --git a/fmapp2/src/com/caf/fmradio/FMRadioService.java b/fmapp2/src/com/caf/fmradio/FMRadioService.java
+index 03672da..1b732d4 100644
+--- a/fmapp2/src/com/caf/fmradio/FMRadioService.java
++++ b/fmapp2/src/com/caf/fmradio/FMRadioService.java
+@@ -149,6 +149,7 @@ public class FMRadioService extends Service
+    MediaRecorder mRecorder = null;
+    MediaRecorder mA2dp = null;
+    private boolean mFMOn = false;
++   private boolean mServiceStartedForPlayback = false;
+    private boolean mFmRecordingOn = false;
+    private static boolean mRtPlusSupport = false;
+    private boolean mSpeakerPhoneOn = false;
+@@ -174,7 +175,7 @@ public class FMRadioService extends Service
+    private boolean mPlaybackInProgress = false;
+    private boolean mStoppedOnFocusLoss = true;
+    private boolean mStoppedOnFactoryReset = false;
+-   private File mSampleFile = null;
++   private FmRecordingStore mRecordingStore;
+    long mSampleStart = 0;
+    int mSampleLength = 0;
+    // Messages handled in FM Service
+@@ -259,6 +260,7 @@ public class FMRadioService extends Service
+    @Override
+    public void onCreate() {
+       super.onCreate();
++      FmRecordingStore.recover(this);
+ 
+       mPref = getApplicationContext().getSharedPreferences("SlimbusPref", MODE_PRIVATE);
+       mEditor = mPref.edit();
+@@ -808,6 +810,14 @@ public class FMRadioService extends Service
+                        Log.d(LOGTAG, "    state: " + intent.getIntExtra("state", 0));
+                        Log.d(LOGTAG, "    name: " + intent.getStringExtra("name"));
+                        mHeadsetPlugged = (intent.getIntExtra("state", 0) == 1);
++                       // Registration replays the current jack state. It does
++                       // not represent a new insertion and must not restart a
++                       // radio the user switched off before service recreation.
++                       // onCreate also queries AudioManager before activity bind.
++                       if (isInitialStickyBroadcast()) {
++                           Log.d(LOGTAG, "Initial headset state; preserve FM power");
++                           return;
++                       }
+                        // if headset is plugged out it is required to disable
+                        // in minimal duration to avoid race conditions with
+                        // audio policy manager switch audio to speaker.
+@@ -1386,318 +1396,91 @@ public class FMRadioService extends Service
+        return status;
+    }
+ 
+-    private File createTempFile(String prefix, String suffix, File directory)
+-            throws IOException {
+-        // Force a prefix null check first
+-        if (prefix.length() < 3) {
+-            throw new IllegalArgumentException("prefix must be at least 3 characters");
+-        }
+-        if (suffix == null) {
+-            suffix = ".tmp";
+-        }
+-        File tmpDirFile = directory;
+-        if (tmpDirFile == null) {
+-            String tmpDir = System.getProperty("java.io.tmpdir", ".");
+-            tmpDirFile = new File(tmpDir);
+-        }
+-
+-        String nameFormat = getResources().getString(R.string.def_save_name_format);
+-        SimpleDateFormat df = new SimpleDateFormat(nameFormat);
+-        String currentTime = df.format(System.currentTimeMillis());
+-
+-        File result;
+-        do {
+-            result = new File(tmpDirFile, prefix + currentTime + suffix);
+-        } while (!result.createNewFile());
+-        return result;
++   private void releaseRecording(boolean publish) {
++       if (mRecordingStore == null) return;
++       FmRecordingStore output = mRecordingStore;
++       mRecordingStore = null;
++       try {
++           if (publish) {
++               output.publish(mSampleLength);
++               Toast.makeText(this, getString(R.string.save_record_file,
++                       output.displayPath()), Toast.LENGTH_LONG).show();
++           }
++       } catch (IOException | RuntimeException error) {
++           Log.e(LOGTAG, "Could not save FM recording", error);
++           Toast.makeText(this, "Unable to save recorded audio", Toast.LENGTH_SHORT).show();
++       } finally {
++           try { output.close(); }
++           catch (IOException | RuntimeException error) { Log.e(LOGTAG, "Could not clean own FM recording", error); }
++       }
+    }
+ 
+    public boolean startRecording() {
+-      int mRecordDuration = -1;
+-
+-      Log.d(LOGTAG, "In startRecording of Recorder");
+-
+        stopRecording();
+-
+-       if (!Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())) {
+-            Log.e(LOGTAG, "startRecording, no external storage available");
+-            return false;
++       if (!Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())
++               || !updateAndShowStorageHint()) return false;
++       long maxFileSize = mStorageSpace - LOW_STORAGE_THRESHOLD;
++       mStoragePath = Environment.getExternalStorageDirectory();
++       try {
++           mRecordingStore = new FmRecordingStore(this);
++           mRecorder = new MediaRecorder();
++           mRecorder.setAudioSource(MediaRecorder.AudioSource.RADIO_TUNER);
++           mRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
++           mRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
++           mRecorder.setAudioSamplingRate(44100);
++           mRecorder.setAudioEncodingBitRate(128000);
++           mRecorder.setAudioChannels(2);
++           mRecorder.setMaxFileSize(maxFileSize);
++           if (FmSharedPreferences.getRecordDuration() != FmSharedPreferences.RECORD_DUR_INDEX_3_VAL)
++               mRecorder.setMaxDuration(FmSharedPreferences.getRecordDuration() * 60 * 1000);
++           mRecorder.setOutputFile(mRecordingStore.descriptor());
++           mRecorder.setOnInfoListener((recorder, what, extra) -> {
++               if (mFmRecordingOn && (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED
++                       || what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED)) {
++                   stopRecording();
++                   if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED)
++                       Toast.makeText(this, R.string.FMRecording_reach_size_limit, Toast.LENGTH_LONG).show();
++               }
++           });
++           mRecorder.setOnErrorListener((recorder, what, extra) -> {
++               Log.e(LOGTAG, "FM recorder error " + what + "/" + extra);
++               if (mFmRecordingOn) stopRecording();
++           });
++           mRecorder.prepare();
++           mRecorder.start();
++           mSampleStart = SystemClock.elapsedRealtime();
++           mFmRecordingOn = true;
++           Log.i(LOGTAG, "FM recording started: " + mRecordingStore.displayPath());
++           return true;
++       } catch (IOException | RuntimeException error) {
++           Log.e(LOGTAG, "Cannot start FM recording", error);
++           try { if (mRecorder != null) mRecorder.release(); }
++           catch (RuntimeException releaseError) { Log.w(LOGTAG, "Could not release failed recorder", releaseError); }
++           finally { mRecorder = null; releaseRecording(false); }
++           return false;
+        }
+-
+-        if (!updateAndShowStorageHint())
+-            return false;
+-        long maxFileSize = mStorageSpace - LOW_STORAGE_THRESHOLD;
+-        if(FmSharedPreferences.getRecordDuration() !=
+-            FmSharedPreferences.RECORD_DUR_INDEX_3_VAL) {
+-            mRecordDuration = (FmSharedPreferences.getRecordDuration() * 60 * 1000);
+-         }
+-
+-        mRecorder = new MediaRecorder();
+-        try {
+-              mRecorder.setMaxFileSize(maxFileSize);
+-              if (mRecordDuration >= 0)
+-                  mRecorder.setMaxDuration(mRecordDuration);
+-        } catch (RuntimeException exception) {
+-
+-        }
+-
+-        mStoragePath = Environment.getExternalStorageDirectory();
+-        Log.d(LOGTAG, "mStoragePath " + mStoragePath);
+-        if (null == mStoragePath) {
+-            Log.e(LOGTAG, "External Storage Directory is null");
+-            return false;
+-        }
+-
+-        mSampleFile = null;
+-        File sampleDir = null;
+-        if (!"".equals(getResources().getString(R.string.def_fmRecord_savePath))) {
+-            String fmRecordSavePath = getResources().getString(R.string.def_fmRecord_savePath);
+-            sampleDir = new File(Environment.getExternalStorageDirectory().toString()
+-                    + fmRecordSavePath);
+-        } else {
+-            sampleDir = new File(Environment.getExternalStorageDirectory().getAbsolutePath()
+-                    + "/FMRecording");
+-        }
+-
+-        if(!(sampleDir.mkdirs() || sampleDir.isDirectory()))
+-            return false;
+-        try {
+-            if (getResources().getBoolean(R.bool.def_save_name_format_enabled)) {
+-                String suffix = getResources().getString(R.string.def_save_name_suffix);
+-                suffix = "".equals(suffix) ? ".aac" : suffix;
+-                String prefix = getResources().getString(R.string.def_save_name_prefix) + '-';
+-                mSampleFile = createTempFile(prefix, suffix, sampleDir);
+-            } else {
+-                mSampleFile = File.createTempFile("FMRecording", ".aac", sampleDir);
+-            }
+-        } catch (IOException e) {
+-            Log.e(LOGTAG, "Not able to access SD Card");
+-            Toast.makeText(this, "Not able to access SD Card", Toast.LENGTH_SHORT).show();
+-            return false;
+-        }
+-
+-        try {
+-             Log.d(LOGTAG, "AudioSource.RADIO_TUNER" +MediaRecorder.AudioSource.RADIO_TUNER);
+-             mRecorder.setAudioSource(MediaRecorder.AudioSource.RADIO_TUNER);
+-             mRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
+-             mRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+-             final int samplingRate = 44100;
+-             mRecorder.setAudioSamplingRate(samplingRate);
+-             final int bitRate = 128000;
+-             mRecorder.setAudioEncodingBitRate(bitRate);
+-             final int audiochannels = 2;
+-             mRecorder.setAudioChannels(audiochannels);
+-        } catch (RuntimeException exception) {
+-             mRecorder.reset();
+-             mRecorder.release();
+-             mRecorder = null;
+-             return false;
+-        }
+-        mRecorder.setOutputFile(mSampleFile.getAbsolutePath());
+-        try {
+-             mRecorder.prepare();
+-             Log.d(LOGTAG, "start");
+-             mRecorder.start();
+-        } catch (IOException e) {
+-             mRecorder.reset();
+-             mRecorder.release();
+-             mRecorder = null;
+-             return false;
+-        } catch (RuntimeException e) {
+-             mRecorder.reset();
+-             mRecorder.release();
+-             mRecorder = null;
+-             return false;
+-        }
+-        mFmRecordingOn = true;
+-        Log.d(LOGTAG, "mSampleFile.getAbsolutePath() " +mSampleFile.getAbsolutePath());
+-        mRecorder.setOnInfoListener(new MediaRecorder.OnInfoListener() {
+-             public void onInfo(MediaRecorder mr, int what, int extra) {
+-                 if ((what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) ||
+-                     (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED)) {
+-                     if (mFmRecordingOn) {
+-                         Log.d(LOGTAG, "Maximum file size/duration reached, stop the recording");
+-                         stopRecording();
+-                     }
+-                     if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED)
+-                         // Show the toast.
+-                         Toast.makeText(FMRadioService.this, R.string.FMRecording_reach_size_limit,
+-                                        Toast.LENGTH_LONG).show();
+-                 }
+-             }
+-             // from MediaRecorder.OnErrorListener
+-             public void onError(MediaRecorder mr, int what, int extra) {
+-                 Log.e(LOGTAG, "MediaRecorder error. what=" + what + ". extra=" + extra);
+-                 if (what == MediaRecorder.MEDIA_RECORDER_ERROR_UNKNOWN) {
+-                     // We may have run out of space on the sdcard.
+-                     if (mFmRecordingOn) {
+-                         stopRecording();
+-                     }
+-                     updateAndShowStorageHint();
+-                 }
+-             }
+-        });
+-
+-        mSampleStart = SystemClock.elapsedRealtime();
+-        Log.d(LOGTAG, "Sample start time: " +mSampleStart);
+-        return true;
+-  }
++   }
+ 
+    public void stopRecording() {
+-       Log.d(LOGTAG, "Enter stopRecord");
+        mFmRecordingOn = false;
+-       if (mRecorder == null)
+-           return;
++       if (mRecorder == null) return;
++       boolean completed = false;
+        try {
+-             mRecorder.stop();
+-       } catch(Exception e) {
+-             e.printStackTrace();
++           mRecorder.stop();
++           mSampleLength = (int)(SystemClock.elapsedRealtime() - mSampleStart);
++           completed = mSampleLength > 0;
++       } catch (RuntimeException error) {
++           Log.e(LOGTAG, "FM recording did not finalize", error);
+        } finally {
+-             Log.d(LOGTAG, "reset and release of mRecorder");
+-             mRecorder.reset();
+-             mRecorder.release();
+-             mRecorder = null;
+-       }
+-       mSampleLength = (int)(SystemClock.elapsedRealtime() - mSampleStart);
+-       Log.d(LOGTAG, "Sample length is " + mSampleLength);
+-
+-       if (mSampleLength == 0)
+-           return;
+-       String state = Environment.getExternalStorageState(mStoragePath);
+-       Log.d(LOGTAG, "storage state is " + state);
+-
+-       if (Environment.MEDIA_MOUNTED.equals(state)) {
+-          try {
+-               this.addToMediaDB(mSampleFile);
+-               Toast.makeText(this,getString(R.string.save_record_file,
+-                              mSampleFile.getAbsolutePath( )),
+-                              Toast.LENGTH_LONG).show();
+-          } catch(Exception e) {
+-               e.printStackTrace();
+-          }
+-       } else {
+-           Log.e(LOGTAG, "SD card must have removed during recording. ");
+-           Toast.makeText(this, "Recording aborted", Toast.LENGTH_SHORT).show();
+-       }
+-       try {
+-           if((mServiceInUse) && (mCallbacks != null) ) {
+-               mCallbacks.onRecordingStopped();
+-           }
+-       } catch (RemoteException e) {
+-           e.printStackTrace();
+-       }
+-       return;
+-   }
+-
+-   /*
+-    * Adds file and returns content uri.
+-    */
+-   private Uri addToMediaDB(File file) {
+-       Log.d(LOGTAG, "In addToMediaDB");
+-       Resources res = getResources();
+-       ContentValues cv = new ContentValues();
+-       long current = System.currentTimeMillis();
+-       long modDate = file.lastModified();
+-       Date date = new Date(current);
+-       SimpleDateFormat formatter = new SimpleDateFormat(
+-               res.getString(R.string.audio_db_title_format));
+-       String title = formatter.format(date);
+-
+-       // Lets label the recorded audio file as NON-MUSIC so that the file
+-       // won't be displayed automatically, except for in the playlist.
+-       cv.put(MediaStore.Audio.Media.IS_MUSIC, "1");
+-       cv.put(MediaStore.Audio.Media.DURATION, mSampleLength);
+-       cv.put(MediaStore.Audio.Media.TITLE, title);
+-       cv.put(MediaStore.Audio.Media.DATA, file.getAbsolutePath());
+-       cv.put(MediaStore.Audio.Media.DATE_ADDED, (int) (current / 1000));
+-       cv.put(MediaStore.Audio.Media.DATE_MODIFIED, (int) (modDate / 1000));
+-       cv.put(MediaStore.Audio.Media.MIME_TYPE, "audio/aac_mp4");
+-       cv.put(MediaStore.Audio.Media.ARTIST,
+-               res.getString(R.string.audio_db_artist_name));
+-       cv.put(MediaStore.Audio.Media.ALBUM,
+-               res.getString(R.string.audio_db_album_name));
+-       Log.d(LOGTAG, "Inserting audio record: " + cv.toString());
+-       ContentResolver resolver = getContentResolver();
+-       Uri base = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+-       Log.d(LOGTAG, "ContentURI: " + base);
+-       Uri result = resolver.insert(base, cv);
+-       if (result == null) {
+-           Toast.makeText(this, "Unable to save recorded audio", Toast.LENGTH_SHORT).show();
+-           return null;
+-       }
+-       if (getPlaylistId(res) == -1) {
+-           createPlaylist(res, resolver);
+-       }
+-       int audioId = Integer.valueOf(result.getLastPathSegment());
+-       addToPlaylist(resolver, audioId, getPlaylistId(res));
+-
+-       // Notify those applications such as Music listening to the
+-       // scanner events that a recorded audio file just created.
+-       sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, result));
+-       return result;
+-   }
+-
+-   private int getPlaylistId(Resources res) {
+-       Uri uri = MediaStore.Audio.Playlists.getContentUri("external");
+-       final String[] ids = new String[] { MediaStore.Audio.Playlists._ID };
+-       final String where = MediaStore.Audio.Playlists.NAME + "=?";
+-       final String[] args = new String[] { res.getString(R.string.audio_db_playlist_name) };
+-       Cursor cursor = query(uri, ids, where, args, null);
+-       if (cursor == null) {
+-           Log.v(LOGTAG, "query returns null");
+-       }
+-       int id = -1;
+-       if (cursor != null) {
+-           cursor.moveToFirst();
+-           if (!cursor.isAfterLast()) {
+-               id = cursor.getInt(0);
++           try { mRecorder.release(); }
++           finally {
++               mRecorder = null;
++               releaseRecording(completed);
+            }
+-           cursor.close();
+        }
+-       return id;
+-   }
+-
+-   private Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
+        try {
+-           ContentResolver resolver = getContentResolver();
+-           if (resolver == null) {
+-               return null;
+-           }
+-           return resolver.query(uri, projection, selection, selectionArgs, sortOrder);
+-        } catch (UnsupportedOperationException ex) {
+-           return null;
+-       }
+-   }
+-
+-   private Uri createPlaylist(Resources res, ContentResolver resolver) {
+-       ContentValues cv = new ContentValues();
+-       cv.put(MediaStore.Audio.Playlists.NAME, res.getString(R.string.audio_db_playlist_name));
+-       Uri uri = resolver.insert(MediaStore.Audio.Playlists.getContentUri("external"), cv);
+-       if (uri == null) {
+-           Toast.makeText(this, "Unable to save recorded audio", Toast.LENGTH_SHORT).show();
+-       }
+-       return uri;
+-   }
+-
+-   private void addToPlaylist(ContentResolver resolver, int audioId, long playlistId) {
+-       String[] cols = new String[] {
+-               MediaStore.Audio.Media.ALBUM_ID
+-       };
+-       Uri uri = MediaStore.Audio.Playlists.Members.getContentUri("external", playlistId);
+-       Cursor cur = resolver.query(uri, cols, null, null, null);
+-       final int base;
+-       if(cur != null && cur.getCount() != 0) {
+-            cur.moveToFirst();
+-            base = cur.getInt(0);
+-            cur.close();
+-       }
+-       else {
+-            base = 0;
+-       }
+-       ContentValues values = new ContentValues();
+-       values.put(MediaStore.Audio.Playlists.Members.PLAY_ORDER, Integer.valueOf(base + audioId));
+-       values.put(MediaStore.Audio.Playlists.Members.AUDIO_ID, audioId);
+-       resolver.insert(uri, values);
++           if (mServiceInUse && mCallbacks != null) mCallbacks.onRecordingStopped();
++       } catch (RemoteException error) { Log.w(LOGTAG, "FM recording callback failed", error); }
+    }
+ 
+     private void resumeAfterCall() {
+@@ -1991,6 +1774,13 @@ public class FMRadioService extends Service
+             .setOngoing(true)
+             .build();
+ 
++          if (!mServiceStartedForPlayback) {
++              // The initial activity binding only creates an idle service.
++              // Only real playback needs a started lifetime. Fulfil the
++              // foreground contract immediately with the notification below.
++              startForegroundService(new Intent(this, FMRadioService.class));
++              mServiceStartedForPlayback = true;
++          }
+           startForeground(FMRADIOSERVICE_STATUS, notification);
+           mFMOn = true;
+       }
+@@ -4275,6 +4065,11 @@ public class FMRadioService extends Service
+ 
+    private void requestFocus() {
+        Log.d(LOGTAG, "++requestFocus");
++       // Rebinding an explicitly disabled radio must leave it idle. A newly
++       // created idle service has not initialized the receiver yet.
++       if (mReceiver == null || !isFmOn()) {
++           return;
++       }
+        if (mReceiver.isCherokeeChip() && (mPref.getBoolean("SLIMBUS_SEQ", true))) {
+            requestFocusImplCherokee();
+        } else {
+diff --git a/fmapp2/src/com/caf/fmradio/FMStats.java b/fmapp2/src/com/caf/fmradio/FMStats.java
+index 1c740d2..e43aabb 100644
+--- a/fmapp2/src/com/caf/fmradio/FMStats.java
++++ b/fmapp2/src/com/caf/fmradio/FMStats.java
+@@ -2848,13 +2848,7 @@ public class FMStats extends Activity  {
+     }
+ 
+     private boolean isCherokeeChip() {
+-        Log.d(LOGTAG, "isCherokeeChip");
+-
+-        String chip = SystemProperties.get("vendor.qcom.bluetooth.soc");
+-        if (chip.equals("cherokee"))
+-            return true;
+-        else
+-            return false;
++        return FmReceiver.isCherokeeChip();
+     }
+ 
+     private boolean isRomeChip() {
+diff --git a/fmapp2/src/com/caf/fmradio/FmRecordingStore.java b/fmapp2/src/com/caf/fmradio/FmRecordingStore.java
+new file mode 100644
+index 0000000..a12017c
+--- /dev/null
++++ b/fmapp2/src/com/caf/fmradio/FmRecordingStore.java
+@@ -0,0 +1,97 @@
++package com.caf.fmradio;
++
++import android.content.ContentValues;
++import android.content.Context;
++import android.content.SharedPreferences;
++import android.database.Cursor;
++import android.net.Uri;
++import android.os.Environment;
++import android.os.ParcelFileDescriptor;
++import android.provider.MediaStore;
++import android.util.Log;
++import java.io.Closeable;
++import java.io.FileDescriptor;
++import java.io.IOException;
++import java.text.SimpleDateFormat;
++import java.util.Date;
++import java.util.Locale;
++import java.util.UUID;
++
++/** Own pending MediaStore recording; no access to other applications' audio. */
++final class FmRecordingStore implements Closeable {
++    private static final String TAG="FMRecordingStore";
++    private static final String PENDING="pending_uri";
++    private final Context context;
++    private final Uri uri;
++    private final String name;
++    private ParcelFileDescriptor descriptor;
++    private boolean published;
++
++    private static SharedPreferences state(Context context) {
++        return context.getSharedPreferences("fm-recording-store",Context.MODE_PRIVATE);
++    }
++
++    static void recover(Context context) {
++        String saved=state(context).getString(PENDING,null);
++        if(saved==null)return;
++        Uri uri=Uri.parse(saved);
++        // Only a row persisted by this app can be recovered. Never delete a
++        // published recording after a crash between publication and commit.
++        if(!saved.matches("content://media/external/audio/media/[0-9]+")) {
++            Log.e(TAG,"Unexpected pending recording URI; leaving it untouched");return;
++        }
++        try(Cursor row=context.getContentResolver().query(uri,
++                new String[]{MediaStore.Audio.Media.IS_PENDING,MediaStore.MediaColumns.OWNER_PACKAGE_NAME},null,null,null)) {
++            if(row!=null && row.moveToFirst() && row.getInt(0)==1 && context.getPackageName().equals(row.getString(1)))
++                context.getContentResolver().delete(uri,null,null);
++            state(context).edit().remove(PENDING).commit();
++        }catch(RuntimeException error){Log.w(TAG,"Could not recover own pending recording",error);}
++    }
++
++    FmRecordingStore(Context context) throws IOException {
++        this.context=context;
++        if(state(context).contains(PENDING))throw new IOException("An earlier own recording still needs recovery");
++        name="FM-"+new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss",Locale.ROOT).format(new Date())+"-"+UUID.randomUUID()+".m4a";
++        ContentValues values=new ContentValues();
++        values.put(MediaStore.Audio.Media.DISPLAY_NAME,name);
++        values.put(MediaStore.Audio.Media.MIME_TYPE,"audio/mp4");
++        values.put(MediaStore.Audio.Media.RELATIVE_PATH,Environment.DIRECTORY_MUSIC+"/FMRecording/");
++        values.put(MediaStore.Audio.Media.IS_PENDING,1);
++        uri=context.getContentResolver().insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,values);
++        if(uri==null)throw new IOException("Cannot create a pending FM recording");
++        boolean ready=false;
++        try {
++            if(!state(context).edit().putString(PENDING,uri.toString()).commit())throw new IOException("Cannot save pending recording state");
++            descriptor=context.getContentResolver().openFileDescriptor(uri,"rw");
++            if(descriptor==null)throw new IOException("Cannot open the pending FM recording");
++            ready=true;
++        }finally{if(!ready)close();}
++    }
++
++    FileDescriptor descriptor(){return descriptor.getFileDescriptor();}
++    String displayPath(){return Environment.DIRECTORY_MUSIC+"/FMRecording/"+name;}
++
++    void publish(long durationMillis) throws IOException {
++        if(descriptor!=null){descriptor.close();descriptor=null;}
++        ContentValues values=new ContentValues();
++        values.put(MediaStore.Audio.Media.IS_PENDING,0);
++        values.put(MediaStore.Audio.Media.DURATION,durationMillis);
++        values.put(MediaStore.Audio.Media.TITLE,name.substring(0,name.length()-4));
++        values.put(MediaStore.Audio.Media.ARTIST,context.getString(R.string.audio_db_artist_name));
++        values.put(MediaStore.Audio.Media.ALBUM,context.getString(R.string.audio_db_album_name));
++        values.put(MediaStore.Audio.Media.IS_MUSIC,1);
++        if(context.getContentResolver().update(uri,values,null,null)!=1)throw new IOException("Cannot publish the FM recording");
++        published=true;
++        if(!state(context).edit().remove(PENDING).commit())Log.w(TAG,"Published recording state will be recovered on next start");
++        Log.i(TAG,"Published FM recording "+uri+" duration_ms="+durationMillis);
++    }
++
++    @Override public void close() throws IOException {
++        try {if(descriptor!=null)descriptor.close();}
++        finally {
++            descriptor=null;
++            if(!published)context.getContentResolver().delete(uri,null,null);
++            state(context).edit().remove(PENDING).commit();
++        }
++    }
++}
+diff --git a/jni/android_hardware_fm.cpp b/jni/android_hardware_fm.cpp
+index c7d4463..7f499d6 100644
+--- a/jni/android_hardware_fm.cpp
++++ b/jni/android_hardware_fm.cpp
+@@ -656,6 +656,10 @@ static jint android_hardware_fmradio_FmReceiverJNI_closeFdNative
+ }
+ 
+ static bool is_soc_cherokee() {
++    char device[PROPERTY_VALUE_MAX] = {'\0'};
++    property_get("ro.product.vendor.device", device, "");
++    if (strcmp(device, "frost") == 0)
++        return true;
+     char value[PROPERTY_VALUE_MAX] = {'\0'};
+     property_get("vendor.qcom.bluetooth.soc", value, NULL);
+     ALOGD("BT soc is %s\n", value);
+diff --git a/qcom/fmradio/FmReceiver.java b/qcom/fmradio/FmReceiver.java
+index 4686d26..210d100 100644
+--- a/qcom/fmradio/FmReceiver.java
++++ b/qcom/fmradio/FmReceiver.java
+@@ -343,8 +343,16 @@ public class FmReceiver extends FmTransceiver
+    private static final int SEARCH_MPXDCC = 0;
+    private static final int SEARCH_SINR_INT = 1;
+ 
++   private static String getSocType(String fallback) {
++       // frost exposes Cherokee only through persist.vendor.*. Avoid changing
++       // Bluetooth's global properties or selecting the legacy /dev/radio0 path.
++       if ("frost".equals(SystemProperties.get("ro.product.vendor.device")))
++           return "cherokee";
++       return SystemProperties.get("vendor.qcom.bluetooth.soc", fallback);
++   }
++
+    public boolean isSmdTransportLayer() {
+-       String chip = SystemProperties.get("vendor.qcom.bluetooth.soc","default");
++       String chip = getSocType("default");
+        if (chip.equals("default"))
+            return true;
+        else
+@@ -352,7 +360,7 @@ public class FmReceiver extends FmTransceiver
+    }
+ 
+    public static boolean isRomeChip() {
+-       String chip = SystemProperties.get("vendor.qcom.bluetooth.soc");
++       String chip = getSocType("");
+        if (chip.equals("rome"))
+            return true;
+        else
+@@ -360,7 +368,7 @@ public class FmReceiver extends FmTransceiver
+    }
+ 
+    public static boolean isCherokeeChip() {
+-       String chip = SystemProperties.get("vendor.qcom.bluetooth.soc");
++       String chip = getSocType("");
+        if (chip.equals("cherokee"))
+            return true;
+        else

@@ -1,0 +1,48 @@
+// Personal frost port: stock RU V13.0.17.0.RGFRUXM FM transport.
+cc_prebuilt_library_shared {
+    name: "c40_fm_helium",
+    stem: "fm_helium",
+    system_ext_specific: true,
+    compile_multilib: "both",
+    arch: {
+        arm: { srcs: ["proprietary/lib/fm_helium.so"] },
+        arm64: { srcs: ["proprietary/lib64/fm_helium.so"] },
+    },
+    shared_libs: ["c40_fm_hci", "liblog", "libnativehelper", "libcutils", "libc++", "libc", "libm", "libdl"],
+    stl: "none",
+    strip: { none: true },
+    check_elf_files: true,
+    allow_undefined_symbols: false,
+}
+
+cc_prebuilt_library_shared {
+    name: "c40_fm_hci",
+    stem: "libfm-hci",
+    system_ext_specific: true,
+    compile_multilib: "both",
+    arch: {
+        arm: { srcs: ["proprietary/lib/libfm-hci.so"] },
+        arm64: { srcs: ["proprietary/lib64/libfm-hci.so"] },
+    },
+    shared_libs: ["libcutils", "libbase", "libhidlbase", "liblog", "libutils", "c40_fm_hidl", "libc++", "libc", "libm", "libdl"],
+    stl: "none",
+    strip: { none: true },
+    check_elf_files: true,
+    allow_undefined_symbols: false,
+}
+
+cc_prebuilt_library_shared {
+    name: "c40_fm_hidl",
+    stem: "vendor.qti.hardware.fm@1.0",
+    system_ext_specific: true,
+    compile_multilib: "both",
+    arch: {
+        arm: { srcs: ["proprietary/lib/vendor.qti.hardware.fm@1.0.so"] },
+        arm64: { srcs: ["proprietary/lib64/vendor.qti.hardware.fm@1.0.so"] },
+    },
+    shared_libs: ["libhidlbase", "liblog", "libutils", "libcutils", "libc++", "libc", "libm", "libdl"],
+    stl: "none",
+    strip: { none: true },
+    check_elf_files: true,
+    allow_undefined_symbols: false,
+}

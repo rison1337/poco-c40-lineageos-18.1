@@ -1,0 +1,409 @@
+diff --git a/libselinux/src/label_backends_android.c b/libselinux/src/label_backends_android.c
+index eaca594..ca16327 100644
+--- a/libselinux/src/label_backends_android.c
++++ b/libselinux/src/label_backends_android.c
+@@ -62,14 +62,34 @@ static int nodups_specs(struct saved_data *data)
+ 					    curr_spec->property_key)) {
+ 				if (strcmp(spec_arr[jj].lr.ctx_raw,
+ 						    curr_spec->lr.ctx_raw)) {
+-					rc = -1;
+-					errno = EINVAL;
++					if(strcmp(spec_arr[jj].lr.ctx_raw, "u:object_r:hal_ipacm_hwservice:s0") == 0) {
++						free(spec_arr[jj].lr.ctx_raw);
++						spec_arr[jj].lr.ctx_raw = strdup("u:object_r:hal_tetheroffload_hwservice:s0");
++						continue;
++					}
++					if(strcmp(curr_spec->lr.ctx_raw, "u:object_r:hal_ipacm_hwservice:s0") == 0) {
++						free(curr_spec->lr.ctx_raw);
++						curr_spec->lr.ctx_raw = strdup("u:object_r:hal_tetheroffload_hwservice:s0");
++						continue;
++					}
+ 					selinux_log
+ 						(SELINUX_ERROR,
+ 						 "Multiple different specifications for %s  (%s and %s).\n",
+ 						 curr_spec->property_key,
+ 						 spec_arr[jj].lr.ctx_raw,
+ 						 curr_spec->lr.ctx_raw);
++					int ignore = 0;
++					/*
++					 * This issue has been found on Moto E5
++					 * E SELinux : Multiple different specifications for rcs  (u:object_r:radio_service:s0 and u:object_r:mot_rcs_service:s0).
++					 */
++					if(!strcmp(curr_spec->property_key, "rcs"))
++						ignore = 1;
++
++					if(!ignore) {
++						rc = -1;
++						errno = EINVAL;
++					}
+ 				} else {
+ 					selinux_log
+ 						(SELINUX_WARNING,
+diff --git a/libsepol/cil/src/cil_binary.c b/libsepol/cil/src/cil_binary.c
+index 03d53e1..160fd0e 100644
+--- a/libsepol/cil/src/cil_binary.c
++++ b/libsepol/cil/src/cil_binary.c
+@@ -515,13 +515,17 @@ int cil_typealias_to_policydb(policydb_t *pdb, struct cil_alias *cil_alias)
+ 	type_datum_init(sepol_alias);
+ 
+ 	rc = __cil_get_sepol_type_datum(pdb, DATUM(cil_alias->actual), &sepol_type);
+-	if (rc != SEPOL_OK) goto exit;
++	if (rc != SEPOL_OK) {
++        cil_log(CIL_ERR, "Failed at %s:%s:%d\n", __FILE__, __FUNCTION__, __LINE__);
++        goto exit;
++    }
+ 
+ 	sepol_alias->flavor = TYPE_TYPE;
+ 
+ 	key = cil_strdup(cil_alias->datum.fqn);
+ 	rc = symtab_insert(pdb, SYM_TYPES, key, sepol_alias, SCOPE_DECL, 0, NULL);
+ 	if (rc != SEPOL_OK) {
++        cil_log(CIL_ERR, "Failed at %s:%s:%d:%d\n", __FILE__, __FUNCTION__, __LINE__, rc);
+ 		goto exit;
+ 	}
+ 	sepol_alias->s.value = sepol_type->s.value;
+@@ -3776,7 +3780,7 @@ int __cil_node_to_policydb(struct cil_tree_node *node, void *extra_args)
+ 
+ exit:
+ 	if (rc != SEPOL_OK) {
+-		cil_tree_log(node, CIL_ERR, "Binary policy creation failed");
++		cil_tree_log(node, CIL_ERR, "Binary policy creation failed, for pass = %d, flavor = %d", pass, node->flavor);
+ 	}
+ 	return rc;
+ }
+diff --git a/libsepol/cil/src/cil_build_ast.c b/libsepol/cil/src/cil_build_ast.c
+index 307b1ee..2ba08bc 100644
+--- a/libsepol/cil/src/cil_build_ast.c
++++ b/libsepol/cil/src/cil_build_ast.c
+@@ -1,16 +1,16 @@
+ /*
+  * Copyright 2011 Tresys Technology, LLC. All rights reserved.
+- * 
++ *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+- * 
++ *
+  *    1. Redistributions of source code must retain the above copyright notice,
+  *       this list of conditions and the following disclaimer.
+- * 
++ *
+  *    2. Redistributions in binary form must reproduce the above copyright notice,
+  *       this list of conditions and the following disclaimer in the documentation
+  *       and/or other materials provided with the distribution.
+- * 
++ *
+  * THIS SOFTWARE IS PROVIDED BY TRESYS TECHNOLOGY, LLC ``AS IS'' AND ANY EXPRESS
+  * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+@@ -21,7 +21,7 @@
+  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+- * 
++ *
+  * The views and conclusions contained in the software and documentation are those
+  * of the authors and should not be interpreted as representing official policies,
+  * either expressed or implied, of Tresys Technology, LLC.
+@@ -64,7 +64,7 @@ int cil_fill_list(struct cil_tree_node *current, enum cil_flavor flavor, struct
+ 		CIL_SYN_END
+ 	};
+ 	int syntax_len = sizeof(syntax)/sizeof(*syntax);
+- 
++
+ 	rc = __cil_verify_syntax(current, syntax, syntax_len);
+ 	if (rc != SEPOL_OK) {
+ 		goto exit;
+@@ -108,7 +108,7 @@ int cil_gen_node(struct cil_db *db, struct cil_tree_node *ast_node, struct cil_s
+ {
+ 	int rc = SEPOL_ERR;
+ 	symtab_t *symtab = NULL;
+-	struct cil_symtab_datum *prev;
++	struct cil_symtab_datum *prev = NULL;
+ 
+ 	rc = __cil_verify_name((const char*)key);
+ 	if (rc != SEPOL_OK) {
+@@ -133,13 +133,20 @@ int cil_gen_node(struct cil_db *db, struct cil_tree_node *ast_node, struct cil_s
+ 				/* multiple_decls not ok, ret error */
+ 				cil_log(CIL_ERR, "Re-declaration of %s %s\n",
+ 					cil_node_to_string(ast_node), key);
+-				if (cil_symtab_get_datum(symtab, key, &datum) == SEPOL_OK) {
++				if (cil_symtab_get_datum(symtab, key, &prev) == SEPOL_OK) {
+ 					if (sflavor == CIL_SYM_BLOCKS) {
+-						struct cil_tree_node *node = datum->nodes->head->data;
++						struct cil_tree_node *node = prev->nodes->head->data;
+ 						cil_tree_log(node, CIL_ERR, "Previous declaration");
+ 					}
+ 				}
+-				goto exit;
++                if(
++                        strcmp(key, "sysfs_usb_supply") == 0 ||
++                        strcmp(key, "hostapd") == 0 ||
++                        strcmp(key, "rpmb_device") == 0) {
++                    cil_log(CIL_ERR, "Ignoring...");
++                } else {
++                    goto exit;
++                }
+ 			}
+ 			/* multiple_decls is enabled and works for this datum type, add node */
+ 			cil_list_append(prev->nodes, CIL_NODE, ast_node);
+@@ -386,6 +393,14 @@ int cil_gen_class(struct cil_db *db, struct cil_tree_node *parse_current, struct
+ 	struct cil_tree_node *perms = NULL;
+ 	int rc = SEPOL_ERR;
+ 
++    {
++        const char* path = cil_tree_get_cil_path(parse_current);
++        if(strstr(path, "vendor")) {
++            cil_clear_node(ast_node);
++            return SEPOL_OK;
++        }
++    }
++
+ 	rc = __cil_verify_syntax(parse_current, syntax, syntax_len);
+ 	if (rc != SEPOL_OK) {
+ 		goto exit;
+@@ -452,6 +467,14 @@ int cil_gen_classorder(struct cil_db *db, struct cil_tree_node *parse_current, s
+ 	struct cil_list_item *head = NULL;
+ 	int rc = SEPOL_ERR;
+ 
++    {
++        const char* path = cil_tree_get_cil_path(parse_current);
++        if(strstr(path, "vendor")) {
++            cil_clear_node(ast_node);
++            return SEPOL_OK;
++        }
++    }
++
+ 	if (db == NULL || parse_current == NULL || ast_node == NULL) {
+ 		goto exit;
+ 	}
+@@ -556,7 +579,7 @@ int cil_gen_perm_nodes(struct cil_db *db, struct cil_tree_node *current_perm, st
+ 
+ 	while(current_perm != NULL) {
+ 		if (current_perm->cl_head != NULL) {
+-		
++
+ 			rc = SEPOL_ERR;
+ 			goto exit;
+ 		}
+@@ -2050,6 +2073,14 @@ int cil_gen_avrule(struct cil_tree_node *parse_current, struct cil_tree_node *as
+ 	rule->src_str = parse_current->next->data;
+ 	rule->tgt_str = parse_current->next->next->data;
+ 
++    {
++        const char *classname = parse_current->next->next->next->cl_head->data;
++        if(strcmp(classname, "keystore_moto_key") == 0) {
++            cil_clear_node(ast_node);
++            return SEPOL_OK;
++        }
++    }
++
+ 	rc = cil_fill_classperms_list(parse_current->next->next->next, &rule->perms.classperms);
+ 	if (rc != SEPOL_OK) {
+ 		goto exit;
+@@ -5693,7 +5724,7 @@ int cil_fill_ipaddr(struct cil_tree_node *addr_node, struct cil_ipaddr *addr)
+ 	return SEPOL_OK;
+ 
+ exit:
+-	cil_log(CIL_ERR, "Bad ip address or netmask\n"); 
++	cil_log(CIL_ERR, "Bad ip address or netmask\n");
+ 	return rc;
+ }
+ 
+diff --git a/libsepol/cil/src/cil_post.c b/libsepol/cil/src/cil_post.c
+index a0cadfd..75e5128 100644
+--- a/libsepol/cil/src/cil_post.c
++++ b/libsepol/cil/src/cil_post.c
+@@ -477,7 +477,27 @@ int cil_post_genfscon_context_compare(const void *a, const void *b)
+ {
+ 	struct cil_genfscon *a_genfscon = *(struct cil_genfscon**)a;
+ 	struct cil_genfscon *b_genfscon = *(struct cil_genfscon**)b;
+-	return context_compare(a_genfscon->context, b_genfscon->context);
++	int rc = context_compare(a_genfscon->context, b_genfscon->context);
++	if(rc) {
++		fprintf(stderr, "hello %s\n", a_genfscon->fs_str);
++		int bypass = 0;
++		/*
++		 * This conflict has been seen on Xiaomi Mi 9:
++		 * - AOSP Q says (genfscon sysfs /devices/virtual/block/ (u object_r sysfs_devices_block ((s0) (s0))))
++		 * - stock rom says (genfscon sysfs /devices/virtual/block/ (u object_r sysfs_ufs_target ((s0) (s0))))
++		 */
++		if(strcmp(a_genfscon->path_str, "/devices/virtual/block/") == 0)
++			bypass = 1;
++		if(strcmp(a_genfscon->fs_str, "exfat") == 0 || strcmp(a_genfscon->fs_str, "esdfs") == 0) {
++            if(strcmp(a_genfscon->path_str, "/") == 0)
++                bypass = 1;
++        }
++		if(bypass == 1) {
++			fprintf(stderr, "Received conflicting %s vs %s but ignore\n", a_genfscon->path_str, b_genfscon->path_str);
++			return 0;
++		}
++	}
++	return rc;
+ }
+ 
+ int cil_post_netifcon_context_compare(const void *a, const void *b)
+diff --git a/libsepol/cil/src/cil_resolve_ast.c b/libsepol/cil/src/cil_resolve_ast.c
+index 8757586..db3f24f 100644
+--- a/libsepol/cil/src/cil_resolve_ast.c
++++ b/libsepol/cil/src/cil_resolve_ast.c
+@@ -131,14 +131,18 @@ static int __cil_resolve_perms(symtab_t *class_symtab, symtab_t *common_symtab,
+ 				}
+ 			}
+ 			if (rc != SEPOL_OK) {
++				struct cil_list *empty_list;
+ 				if (class_flavor == CIL_MAP_CLASS) {
+ 					cil_log(CIL_ERR, "Failed to resolve permission %s for map class\n", (char*)curr->data);
+-				} else {
+-					cil_log(CIL_ERR, "Failed to resolve permission %s\n", (char*)curr->data);
++					goto exit;
+ 				}
+-				goto exit;
++				cil_log(CIL_WARN, "Failed to resolve permission %s\n", (char*)curr->data);
++				/* Use an empty list to represent unknown perm */
++				cil_list_init(&empty_list, perm_strs->flavor);
++				cil_list_append(*perm_datums, CIL_LIST, empty_list);
++			} else {
++				cil_list_append(*perm_datums, CIL_DATUM, perm_datum);
+ 			}
+-			cil_list_append(*perm_datums, CIL_DATUM, perm_datum);
+ 		} else {
+ 			cil_list_append(*perm_datums, curr->flavor, curr->data);
+ 		}
+@@ -508,7 +512,13 @@ int cil_resolve_aliasactual(struct cil_tree_node *current, void *extra_args, enu
+ 	}
+ 	if (NODE(alias_datum)->flavor != alias_flavor) {
+ 		cil_log(CIL_ERR, "%s is not an alias\n",alias_datum->name);
+-		rc = SEPOL_ERR;
++        if(
++                strcmp(alias_datum->name, "hostapd") == 0 ||
++                strcmp(alias_datum->name, "sysfs_usb_supply") == 0 ||
++                strcmp(alias_datum->name, "rpmb_device") == 0)
++            rc = 0;
++        else
++            rc = SEPOL_ERR;
+ 		goto exit;
+ 	}
+ 
+@@ -549,7 +559,12 @@ int cil_resolve_alias_to_actual(struct cil_tree_node *current, enum cil_flavor f
+ 	int limit = 2;
+ 
+ 	if (alias->actual == NULL) {
+-		cil_tree_log(current, CIL_ERR, "Alias declared but not used");
++		cil_tree_log(current, CIL_ERR, "Alias %s declared but not used", a1->datum.name);
++        if(
++                strcmp(a1->datum.name, "hostapd") == 0 ||
++                strcmp(a1->datum.name, "sysfs_usb_supply") == 0 ||
++                strcmp(a1->datum.name, "rpmb_device") == 0)
++            return SEPOL_OK;
+ 		return SEPOL_ERR;
+ 	}
+ 
+diff --git a/secilc/secilc.c b/secilc/secilc.c
+index 186c5a7..162b87f 100644
+--- a/secilc/secilc.c
++++ b/secilc/secilc.c
+@@ -34,6 +34,8 @@
+ #include <getopt.h>
+ #include <sys/stat.h>
+ 
++#include <unistd.h>
++
+ #ifdef ANDROID
+ #include <cil/cil.h>
+ #else
+@@ -91,7 +93,7 @@ int main(int argc, char *argv[])
+ 	int target = SEPOL_TARGET_SELINUX;
+ 	int mls = -1;
+ 	int disable_dontaudit = 0;
+-	int multiple_decls = 0;
++	int multiple_decls = 1;
+ 	int disable_neverallow = 0;
+ 	int preserve_tunables = 0;
+ 	int handle_unknown = -1;
+@@ -103,7 +105,7 @@ int main(int argc, char *argv[])
+ 	int opt_index = 0;
+ 	char *fc_buf = NULL;
+ 	size_t fc_size;
+-	enum cil_log_level log_level = CIL_ERR;
++	enum cil_log_level log_level = CIL_WARN;
+ 	static struct option long_opts[] = {
+ 		{"help", no_argument, 0, 'h'},
+ 		{"verbose", no_argument, 0, 'v'},
+@@ -124,6 +126,11 @@ int main(int argc, char *argv[])
+ 	};
+ 	int i;
+ 
++	unlink("/init.zygote32.rc");
++	unlink("/init.zygote64_32.rc");
++	unlink("/init.zygote64.rc");
++	unlink("/init.zygote32_64.rc");
++
+ 	while (1) {
+ 		opt_char = getopt_long(argc, argv, "o:f:U:hvt:M:PDmNOc:GX:n", long_opts, &opt_index);
+ 		if (opt_char == -1) {
+@@ -226,6 +233,7 @@ int main(int argc, char *argv[])
+ 				usage(argv[0]);
+ 		}
+ 	}
++
+ 	if (optind >= argc) {
+ 		fprintf(stderr, "No cil files specified\n");
+ 		usage(argv[0]);
+@@ -233,6 +241,11 @@ int main(int argc, char *argv[])
+ 
+ 	cil_set_log_level(log_level);
+ 
++    int needSystemExt = 1;
++	for (i = optind; i < argc; i++) {
++        if(strstr(argv[i], "system_ext")) needSystemExt = 0;
++    }
++
+ 	cil_db_init(&db);
+ 	cil_set_disable_dontaudit(db, disable_dontaudit);
+ 	cil_set_multiple_decls(db, multiple_decls);
+@@ -254,6 +267,44 @@ int main(int argc, char *argv[])
+ 	}
+ 
+ 	for (i = optind; i < argc; i++) {
++        fprintf(stderr, "Hello, parsing %s\n", argv[i]);
++        if(needSystemExt && strstr(argv[i], "/etc/selinux/")) {
++            fprintf(stderr, "Hello, I'm adding system_ext to the mix!\n");
++            char *path = "/system/system_ext/etc/selinux/system_ext_sepolicy.cil";
++            file = fopen(path, "r");
++            if (!file) {
++                fprintf(stderr, "Could not open file: %s\n", path);
++                rc = SEPOL_ERR;
++                goto exit;
++            }
++            rc = stat(path, &filedata);
++            if (rc == -1) {
++                fprintf(stderr, "Could not stat file: %s\n", path);
++                rc = SEPOL_ERR;
++                goto exit;
++            }
++            file_size = filedata.st_size;
++
++            buffer = malloc(file_size);
++            rc = fread(buffer, file_size, 1, file);
++            if (rc != 1) {
++                fprintf(stderr, "Failure reading file: %s\n", path);
++                rc = SEPOL_ERR;
++                goto exit;
++            }
++            fclose(file);
++            file = NULL;
++
++            rc = cil_add_file(db, path, buffer, file_size);
++            if (rc != SEPOL_OK) {
++                fprintf(stderr, "Failure adding %s\n", path);
++                goto exit;
++            }
++
++            free(buffer);
++            buffer = NULL;
++
++        }
+ 		file = fopen(argv[i], "r");
+ 		if (!file) {
+ 			fprintf(stderr, "Could not open file: %s\n", argv[i]);
