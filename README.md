@@ -1,6 +1,6 @@
 # LineageOS 18.1 for POCO C40
 
-Android 11 · R1 · Linux 5.4.242. PHH Treble patches and a custom kernel.
+Android 11 · R2 · Linux 5.4.242. PHH Treble patches and a custom kernel.
 
 [Download](https://github.com/rison1337/poco-c40-lineageos-18.1/releases/latest) ·
 [Kernel](https://github.com/rison1337/poco-c40-kernel/releases/latest) ·
@@ -111,3 +111,7 @@ fastboot reboot
 [Kernel source](https://github.com/rison1337/poco-c40-kernel) ·
 [Changelog](docs/CHANGELOG.md) · [Validation](docs/VALIDATION.md) ·
 [Testing](docs/TESTING.md) · [Build instructions](docs/BUILD.md)
+
+If fastboot reports `Couldn't download data`, stay in fastbootd. Run
+`fastboot reboot fastboot`, repeat the fastbootd checks, then flash
+`system` again. Reboot Android only after the entire write succeeds.

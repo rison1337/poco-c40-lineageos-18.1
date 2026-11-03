@@ -93,3 +93,7 @@ fastboot reboot
 **Do not erase `userdata` or `metadata`, and do not flash `vbmeta`.**
 
 [Kernel instructions](KERNEL.md) · [Magisk instructions](MAGISK.md)
+
+If fastboot reports `Couldn't download data`, stay in fastbootd. Run
+`fastboot reboot fastboot`, repeat the fastbootd checks, then flash
+`system` again. Reboot Android only after the entire write succeeds.
