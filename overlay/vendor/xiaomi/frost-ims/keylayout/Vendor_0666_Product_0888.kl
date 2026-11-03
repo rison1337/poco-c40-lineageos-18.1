@@ -1,0 +1,5 @@
+# POCO C40 rear fingerprint sensor (uinput-fpc).
+# Intentionally no key mappings: the vendor navigation interface emits SELECT,
+# directional and modifier keys when the sensor is touched after unlocking.
+# Fingerprint authentication uses the biometric HAL independently of these keys.
+# Match the input device ID before the vendor's name-based uinput-fpc layout.

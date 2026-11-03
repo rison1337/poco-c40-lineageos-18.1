@@ -8,3 +8,7 @@ DEVICE_FRAMEWORK_COMPATIBILITY_MATRIX_FILE += vendor/xiaomi/frost-ims/vintf/comp
 PRODUCT_PACKAGES += c40_sensors_hub_flush_fix
 PRODUCT_PACKAGES += C40WifiOverlay
 PRODUCT_PACKAGES += c40_cne_cross_user_init c40_cne_cross_user_permission
+
+# Keep rear fingerprint touches from acting as keyboard navigation.
+PRODUCT_COPY_FILES += \
+    vendor/xiaomi/frost-ims/keylayout/Vendor_0666_Product_0888.kl:$(TARGET_COPY_OUT_SYSTEM)/usr/keylayout/Vendor_0666_Product_0888.kl

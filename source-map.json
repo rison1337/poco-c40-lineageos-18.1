@@ -400,7 +400,7 @@
   "extra_trees": [
     {
       "path": "vendor/xiaomi/frost-ims",
-      "files": 54
+      "files": 55
     },
     {
       "path": "vendor/xiaomi/frost-fm",

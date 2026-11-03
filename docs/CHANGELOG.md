@@ -5,6 +5,7 @@
 - C40 Bluetooth audio policy and a Settings crash when disconnecting a paired device.
 - FM cold start and playback service, kernel recording route and MediaStore saving.
 - Camera HDR toggle handling.
+- Rear fingerprint sensor touches no longer select or long-press icons after unlocking.
 - Sensor flush completion routed to the correct sensor and a fix for a stuck wake lock.
 - CPU cooling control in the kernel driver.
 - USB/ADB asynchronous FunctionFS transfers and gadget endpoint alignment,
